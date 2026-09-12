@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { apiRequest } from "./api";
-import { BookOpen, Brain, Camera, Check, Coins, Dumbbell, Gem, HeartHandshake, Moon, Plus, ScrollText, Sparkles, Sun, WandSparkles, X, Heart, Zap, Target, Calendar } from "lucide-react";
+import { BookOpen, Brain, Camera, Check, Coins, Dumbbell, Gem, HeartHandshake, Moon, Plus, ScrollText, Sparkles, Sun, WandSparkles, X, Heart, Zap, Target, Calendar, Volume2, VolumeX } from "lucide-react";
 
 import darkBg from "./assets/dark-bg.jpeg";
 import lightBg from "./assets/light-bg.jpeg";
@@ -20,7 +20,7 @@ function Icon({ children }) {
   return <Glyph className="ui-icon" aria-hidden="true" strokeWidth={1.8} />;
 }
 
-// --- PROFILE MODAL (THE SOUL SHEET) CLEANED OF BROKEN TAILWIND ---
+// --- PROFILE MODAL (THE SOUL SHEET) ---
 function ProfileModal({ user, profile, onClose, onLogout }) {
   const stats = profile?.attributes || { intelligence: user.intelligence, discipline: user.discipline, strength: user.strength, health: user.health, emotional_intelligence: user.emotional_intelligence };
   
@@ -86,6 +86,31 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   const [showProfile, setShowProfile] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  // --- AUDIO & EVENT ENGINE ---
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  
+  // Create audio objects (ensure these exist in public/assets/)
+  const bgmAudio = useRef(new Audio('/assets/bgm.mp3'));
+  const sfxAudio = useRef(new Audio('/assets/levelup.mp3'));
+  
+  // Track previous level to detect promotions
+  const previousLevel = useRef(null);
+
+  useEffect(() => {
+    bgmAudio.current.loop = true;
+    bgmAudio.current.volume = 0.4;
+    
+    if (audioEnabled) {
+      bgmAudio.current.play().catch(() => setAudioEnabled(false));
+    } else {
+      bgmAudio.current.pause();
+    }
+    
+    // Cleanup on unmount
+    return () => bgmAudio.current.pause();
+  }, [audioEnabled]);
+
   const notify = (message, tone = "success") => {
     setToast({ message, tone });
     window.setTimeout(() => setToast(null), 3600);
@@ -110,6 +135,26 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   useEffect(() => {
     loadGame(false);
   }, []);
+
+  // --- LEVEL UP OBSERVER ---
+  useEffect(() => {
+    if (gameState.profile?.level) {
+      const currentLvl = gameState.profile.level;
+      
+      // If previousLevel is set, and current level is higher, trigger Ascension
+      if (previousLevel.current !== null && currentLvl > previousLevel.current) {
+        if (audioEnabled) {
+          sfxAudio.current.currentTime = 0;
+          sfxAudio.current.play().catch(e => console.log("SFX blocked:", e));
+        }
+        setShowLevelUp(true);
+        // Clear animation overlay after 3.5 seconds
+        setTimeout(() => setShowLevelUp(false), 3500);
+      }
+      
+      previousLevel.current = currentLvl;
+    }
+  }, [gameState.profile?.level, audioEnabled]);
 
   useEffect(() => {
     if (!gameState.boss?.expires_at) return undefined;
@@ -287,8 +332,15 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   return (
     <div className={`game-shell ${darkMode ? "night" : "day"}`} style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}>
       
+      {/* LEVEL UP SPECTACLE */}
+      {showLevelUp && (
+        <div className="level-up-overlay">
+          <div className="level-up-text">LEVEL UP</div>
+        </div>
+      )}
+
       {isLoggingOut && (
-        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity 1s ease' }}>
           <p style={{ color: '#3b82f6', fontFamily: 'monospace', letterSpacing: '0.3em' }}>THE SYSTEM SLUMBERS...</p>
         </div>
       )}
@@ -310,7 +362,12 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
             <span style={{ color: '#facc15', fontFamily: 'monospace', fontWeight: 'bold' }}>{profile?.coins ?? user.coins}</span>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderLeft: '1px solid #334155', paddingLeft: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '1px solid #334155', paddingLeft: '1.5rem' }}>
+            {/* AUDIO TOGGLE */}
+            <button className="round-control" type="button" aria-label="Toggle audio" onClick={() => setAudioEnabled(!audioEnabled)} style={{ background: 'none', border: 'none', color: audioEnabled ? '#60a5fa' : '#64748b', cursor: 'pointer' }}>
+              {audioEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+
             <button className="round-control" type="button" aria-label="Toggle theme" onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer' }}>
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
