@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { apiRequest } from "./api";
-import { BookOpen, Brain, Check, Coins, Dumbbell, Gem, HeartHandshake, Moon, Plus, ScrollText, Sparkles, Sun, WandSparkles } from "lucide-react";
+import { BookOpen, Brain, Camera, Check, Coins, Dumbbell, Gem, HeartHandshake, Moon, Plus, ScrollText, Sparkles, Sun, WandSparkles, X } from "lucide-react";
 
 import darkBg from "./assets/dark-bg.jpeg";
 import lightBg from "./assets/light-bg.jpeg";
@@ -28,10 +28,14 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   const [bonusQuest, setBonusQuest] = useState(null);
   const [bonusInterests, setBonusInterests] = useState(user.interests || "");
   const [showQuestForm, setShowQuestForm] = useState(false);
+  const [showCharacterEditor, setShowCharacterEditor] = useState(false);
   const [verificationTask, setVerificationTask] = useState(null);
+  const [capturedProof, setCapturedProof] = useState(null);
+  const [character, setCharacter] = useState({ gender: user.character_gender || "male", hair: user.character_hair || "short", mouth: user.character_mouth || "smile", hairColor: user.character_hair_color || "brown", skinColor: user.character_skin_color || "warm", outfitColor: user.character_outfit_color || "blue" });
   const [newQuest, setNewQuest] = useState({ title: "", category: "intelligence", is_mandatory: false });
   const [toast, setToast] = useState(null);
   const uploadRef = useRef(null);
+  const [bossSecondsRemaining, setBossSecondsRemaining] = useState(0);
 
   const notify = (message, tone = "success") => {
     setToast({ message, tone });
@@ -57,6 +61,14 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   useEffect(() => {
     loadGame(false);
   }, []);
+
+  useEffect(() => {
+    if (!gameState.boss?.expires_at) return undefined;
+    const updateTimer = () => setBossSecondsRemaining(Math.max(0, Math.floor((new Date(gameState.boss.expires_at).getTime() - Date.now()) / 1000)));
+    updateTimer();
+    const timer = window.setInterval(updateTimer, 1000);
+    return () => window.clearInterval(timer);
+  }, [gameState.boss]);
 
   const profile = gameState.profile;
   const tasks = gameState.tasks;
@@ -86,6 +98,7 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
 
   const completeTask = async (task) => {
     if (task.verification_required && task.verification_status !== "verified") {
+      setCapturedProof(null);
       setVerificationTask(task);
       return;
     }
@@ -103,7 +116,7 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
 
   const verifyTask = async (event) => {
     event.preventDefault();
-    const image = uploadRef.current?.files?.[0];
+    const image = capturedProof || uploadRef.current?.files?.[0];
     if (!image || !verificationTask) return;
     setActionState(`verify-${verificationTask.id}`);
     try {
@@ -114,6 +127,20 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
       setVerificationTask(null);
       await loadGame();
       notify("Verification accepted. Quest cleared.");
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setActionState("");
+    }
+  };
+
+  const saveCharacter = async (nextCharacter) => {
+    setActionState("save-character");
+    try {
+      const saved = await apiRequest("/auth/me", { method: "PATCH", body: JSON.stringify({ character_gender: nextCharacter.gender, character_hair: nextCharacter.hair, character_mouth: nextCharacter.mouth, character_hair_color: nextCharacter.hairColor, character_skin_color: nextCharacter.skinColor, character_outfit_color: nextCharacter.outfitColor }) });
+      setCharacter(nextCharacter);
+      setShowCharacterEditor(false);
+      notify(`${saved.display_name}'s chibi form has been saved.`);
     } catch (error) {
       notify(error.message, "error");
     } finally {
@@ -241,7 +268,7 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
           {gameState.error && <div className="inline-alert error" role="alert"><strong>The realm is unstable.</strong> {gameState.error}</div>}
           {gameState.loading && <div className="loading-state">Rebuilding the realm...</div>}
 
-          {activeView === "realm" && <RealmView profile={profile} user={user} tasks={tasks} mandatoryTasks={mandatoryTasks} boss={gameState.boss} actionState={actionState} onCompleteBoss={completeBoss} onNavigate={setActiveView} />}
+          {activeView === "realm" && <RealmView profile={profile} user={user} character={character} tasks={tasks} mandatoryTasks={mandatoryTasks} boss={gameState.boss} bossSecondsRemaining={bossSecondsRemaining} actionState={actionState} onCompleteBoss={completeBoss} onNavigate={setActiveView} onCustomize={() => setShowCharacterEditor(true)} />}
           {activeView === "quests" && (
             <section className="view-section">
               <div className="view-intro"><div><p className="kicker">THE DAILY TRINITY</p><h1>Quest Board</h1><p>Small actions restore the shattered realm. Choose one worthy of your next hour.</p></div><button className="primary-btn" type="button" onClick={() => setShowQuestForm(true)}><Icon>+</Icon> New quest</button></div>
@@ -256,13 +283,14 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
       </div>
 
       {showQuestForm && <QuestForm value={newQuest} loading={actionState === "create-quest"} onChange={setNewQuest} onSubmit={submitQuest} onClose={() => setShowQuestForm(false)} />}
-      {verificationTask && <VerificationModal task={verificationTask} loading={actionState === `verify-${verificationTask.id}`} uploadRef={uploadRef} onSubmit={verifyTask} onClose={() => setVerificationTask(null)} />}
+      {verificationTask && <VerificationModal task={verificationTask} loading={actionState === `verify-${verificationTask.id}`} uploadRef={uploadRef} capturedProof={capturedProof} onCapture={setCapturedProof} onSubmit={verifyTask} onClose={() => { setCapturedProof(null); setVerificationTask(null); }} />}
+      {showCharacterEditor && <CharacterForge character={character} saving={actionState === "save-character"} onSave={saveCharacter} onClose={() => setShowCharacterEditor(false)} />}
       {toast && <div className={`toast ${toast.tone}`} role="status">{toast.message}</div>}
     </div>
   );
 }
 
-function RealmView({ profile, user, tasks, mandatoryTasks, boss, actionState, onCompleteBoss, onNavigate }) {
+function RealmView({ profile, user, character, tasks, mandatoryTasks, boss, bossSecondsRemaining, actionState, onCompleteBoss, onNavigate, onCustomize }) {
   const stats = profile?.attributes || { intelligence: user.intelligence, discipline: user.discipline, strength: user.strength, health: user.health, emotional_intelligence: user.emotional_intelligence };
   const clearedMandatory = mandatoryTasks.filter((task) => task.is_completed).length;
   const levelProgress = profile?.level_progress ?? 0;
@@ -271,12 +299,12 @@ function RealmView({ profile, user, tasks, mandatoryTasks, boss, actionState, on
     { key: "intelligence", label: "Intelligence", short: "INT", value: stats.intelligence, color: "gold", note: "Clarity & craft" },
     { key: "discipline", label: "Discipline", short: "DIS", value: stats.discipline, color: "violet", note: "Streak power" },
     { key: "strength", label: "Physicality", short: "PHY", value: stats.strength, color: "coral", note: "Energy & HP" },
-    { key: "health", label: "Health", short: "HP", value: stats.health, color: "mint", note: "Realm vitality" },
+    { key: "health", label: "Health", short: "HP", value: stats.health, color: stats.health < 30 ? "red" : stats.health < 60 ? "yellow" : "green", note: "Realm vitality" },
     { key: "emotional_intelligence", label: "Social & emotional", short: "EQ", value: stats.emotional_intelligence, color: "blue", note: "Human connection" },
   ];
 
   return <section className="view-section realm-view">
-    <div className="realm-hero"><div><p className="kicker">THE SHATTERED REALM / CHAPTER 01</p><h1>Make the ordinary<br /><em>extraordinary.</em></h1><p className="hero-copy">Your focus is the magic. Your habits are the path. Restore your world one deliberate action at a time.</p><button className="primary-btn" type="button" onClick={() => onNavigate("quests")}>Enter the quest board <span>-&gt;</span></button></div><div className="realm-sigil"><div className="sigil-ring ring-one" /><div className="sigil-ring ring-two" /><span>+</span><small>SEQUENCE<br />01</small></div></div>
+    <div className="realm-hero"><div><p className="kicker">THE SHATTERED REALM / CHAPTER 01</p><h1>Make the ordinary<br /><em>extraordinary.</em></h1><p className="hero-copy">Your focus is the magic. Your habits are the path. Restore your world one deliberate action at a time.</p><button className="primary-btn" type="button" onClick={() => onNavigate("quests")}>Enter the quest board <span>-&gt;</span></button></div><div className="realm-hero-character"><ChibiCharacter character={character} /><button className="customize-link" type="button" onClick={onCustomize}>Customize hero</button></div></div>
     <div className="world-map" aria-label="The shattered realm map">
       <div className="map-stars">+ &nbsp; . &nbsp; * &nbsp; . &nbsp; + &nbsp; . &nbsp; * &nbsp; . &nbsp; +</div>
       <div className="map-path path-one" /><div className="map-path path-two" />
@@ -290,9 +318,9 @@ function RealmView({ profile, user, tasks, mandatoryTasks, boss, actionState, on
     <div className="progress-strip"><div className="progress-copy"><span className="kicker">LEVEL {profile?.level ?? user.level}</span><strong>{profile?.xp ?? user.xp} <small>/ {profile?.next_level_xp ?? 100} XP</small></strong></div><div className="progress-track"><span style={{ width: `${Math.min(100, levelProgress)}%` }} /></div><span className="progress-next">{Math.max(0, (profile?.next_level_xp ?? 100) - (profile?.xp ?? user.xp))} XP to level up</span></div>
     <div className="realm-grid">
       <div className="realm-column"><div className="section-heading"><div><p className="kicker">YOUR ATTRIBUTES</p><h2>Build your focus tree</h2></div><span>LV. {profile?.level ?? user.level}</span></div><div className="attribute-list">{attributeRows.map((stat) => <div className="attribute-row" key={stat.key}><div className={`attribute-orb ${stat.color}`}>{stat.short}</div><div className="attribute-info"><div><strong>{stat.label}</strong><span>{stat.value}</span></div><small>{stat.note}</small><div className="attribute-track"><span className={stat.color} style={{ width: `${Math.min(100, stat.value * 5)}%` }} /></div></div></div>)}</div></div>
-      <div className="realm-column"><div className="section-heading"><div><p className="kicker">DAILY TRINITY</p><h2>Keep the chain alive</h2></div><span className="streak-label">{profile?.streak_count ?? user.streak_count} day streak</span></div><div className="trinity-card"><div className="trinity-orbit"><span>{clearedMandatory}<small>/ {mandatoryTasks.length || 3}</small></span></div><div><h3>Three anchors, one stronger you.</h3><p>Complete mandatory quests to protect your streak and strengthen Discipline.</p><button className="text-link" type="button" onClick={() => onNavigate("quests")}>View today's anchors -&gt;</button></div></div><div className="mini-quest-list">{activeTasks.length ? activeTasks.map((task) => <div key={task.id}><span className={`mini-dot ${categories[task.category]?.color || "gold"}`} /><span>{task.title}</span><b>+{task.xp_reward}</b></div>) : <p className="muted">The path is clear. Add your next quest.</p>}</div></div>
+      <div className="realm-column"><div className="section-heading"><div><p className="kicker">DAILY TRINITY</p><h2>Keep the chain alive</h2></div><span className="streak-label">🔥 {profile?.streak_count ?? user.streak_count} day streak</span></div><div className="trinity-card"><div className="trinity-orbit"><span>{clearedMandatory}<small>/ {mandatoryTasks.length || 3}</small></span></div><div><h3>Three anchors, one stronger you.</h3><p>Complete mandatory quests to protect your streak and strengthen Discipline.</p><button className="text-link" type="button" onClick={() => onNavigate("quests")}>View today's anchors -&gt;</button></div></div><div className="mini-quest-list">{activeTasks.length ? activeTasks.map((task) => <div key={task.id}><span className={`mini-dot ${categories[task.category]?.color || "gold"}`} /><span>{task.title}</span><b>+{task.xp_reward}</b></div>) : <p className="muted">The path is clear. Add your next quest.</p>}</div></div>
     </div>
-    <div className="boss-banner"><div className="boss-emblem">!</div><div className="boss-content"><p className="kicker">HIGH-STAKES EVENT / ACTIVE</p><h2>{boss?.title || "The realm is resting"}</h2><p>{boss?.description || "Complete a quest to summon your next challenge."}</p><div className="boss-health"><span style={{ width: boss ? `${(boss.hp_remaining / boss.hp_total) * 100}%` : "0%" }} /></div><small>{boss ? `${boss.hp_remaining} HP remains` : "No active boss"}</small></div><div className="boss-reward"><span>BOUNTY</span><strong>+{boss?.xp_reward ?? 0} XP</strong><small>+{boss?.coin_reward ?? 0} coins</small>{boss && <button className="outline-btn" type="button" disabled={actionState === "boss"} onClick={onCompleteBoss}>{actionState === "boss" ? "Fighting..." : "Defeat boss"}</button>}</div></div>
+    <div className="boss-banner"><div className="boss-emblem">!</div><div className="boss-content"><p className="kicker">HIGH-STAKES EVENT / ACTIVE</p><h2>{boss?.title || "The realm is resting"}</h2><p>{boss?.description || "Complete a quest to summon your next challenge."}</p><div className="boss-health"><span style={{ width: boss ? `${(boss.hp_remaining / boss.hp_total) * 100}%` : "0%" }} /></div><small>{boss ? `${boss.hp_remaining} HP remains` : "No active boss"}</small></div><div className="boss-reward"><span>⏱ {boss ? `${String(Math.floor(bossSecondsRemaining / 60)).padStart(2, "0")}:${String(bossSecondsRemaining % 60).padStart(2, "0")}` : "05:00"}</span><strong>+{boss?.xp_reward ?? 0} XP</strong><small>+{boss?.coin_reward ?? 0} coins</small>{boss && <button className="outline-btn" type="button" disabled={actionState === "boss" || bossSecondsRemaining === 0} onClick={onCompleteBoss}>{actionState === "boss" ? "Fighting..." : bossSecondsRemaining === 0 ? "Expired" : "Defeat boss"}</button>}</div></div>
   </section>;
 }
 
@@ -314,8 +342,50 @@ function QuestForm({ value, loading, onChange, onSubmit, onClose }) {
   return <div className="modal-backdrop"><form className="modal-card" onSubmit={onSubmit}><button className="modal-close" type="button" onClick={onClose}>X</button><p className="kicker">ADD TO THE PATH</p><h2>Forge a new quest</h2><p>Give one meaningful action a place in your realm.</p><label>Quest title<input autoFocus value={value.title} onChange={(event) => onChange({ ...value, title: event.target.value })} placeholder="e.g. Morning training" maxLength={160} required /></label><fieldset><legend>Which attribute will grow?</legend>{Object.entries(categories).map(([key, category]) => <button className={`category-select ${value.category === key ? "selected" : ""}`} type="button" key={key} onClick={() => onChange({ ...value, category: key })}><span>{category.short}</span>{category.label}</button>)}</fieldset><label className="toggle-label"><input type="checkbox" checked={value.is_mandatory} onChange={(event) => onChange({ ...value, is_mandatory: event.target.checked })} /><span>Make this part of my Daily Trinity</span></label><button className="primary-btn" type="submit" disabled={loading}>{loading ? "Forging..." : "Forge quest"}</button></form></div>;
 }
 
-function VerificationModal({ task, loading, uploadRef, onSubmit, onClose }) {
-  return <div className="modal-backdrop"><form className="modal-card" onSubmit={onSubmit}><button className="modal-close" type="button" onClick={onClose}>X</button><p className="kicker">ANTI-CHEAT VERIFICATION</p><h2>Prove the deed.</h2><p><strong>{task.title}</strong> is a physical Daily Trinity quest. Submit a photo to verify it before claiming your XP.</p><label className="upload-box"><span>+</span><strong>Choose proof image</strong><small>JPEG, PNG, or WebP up to 5 MB</small><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" required /></label><button className="primary-btn" type="submit" disabled={loading}>{loading ? "Verifying..." : "Submit proof"}</button></form></div>;
+function ChibiCharacter({ character, large = false }) {
+  return <div className={`chibi ${large ? "large" : ""} ${character.gender} hair-${character.hair} mouth-${character.mouth} hair-color-${character.hairColor} skin-${character.skinColor} outfit-${character.outfitColor}`} aria-label="Custom chibi character"><div className="chibi-shadow" /><div className="chibi-body"><span className="chibi-arm left" /><span className="chibi-arm right" /></div><div className="chibi-head"><span className="chibi-hair" /><span className="chibi-eye left" /><span className="chibi-eye right" /><span className="chibi-mouth" /></div></div>;
+}
+
+function VerificationModal({ task, loading, uploadRef, capturedProof, onCapture, onSubmit, onClose }) {
+  return <div className="modal-backdrop"><div className="modal-card camera-modal"><button className="modal-close" type="button" onClick={onClose}><X size={15} /></button><p className="kicker">ANTI-CHEAT VERIFICATION</p><h2>Prove the deed.</h2><p><strong>{task.title}</strong> is a physical Daily Trinity quest. Use the camera or upload a photo before claiming your XP.</p><CameraCapture onCapture={onCapture} capturedProof={capturedProof} /><form onSubmit={onSubmit}><label className="upload-box"><span><Camera size={21} /></span><strong>{capturedProof ? "Proof captured" : "Or choose a proof image"}</strong><small>JPEG, PNG, or WebP up to 5 MB</small><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onCapture(event.target.files?.[0] || null)} /></label><button className="primary-btn" type="submit" disabled={loading || !capturedProof}>{loading ? "Verifying..." : "Submit proof"}</button></form></div></div>;
+}
+
+function CameraCapture({ onCapture, capturedProof }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [cameraState, setCameraState] = useState("idle");
+  const streamRef = useRef(null);
+
+  const startCamera = async () => {
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      videoRef.current.srcObject = streamRef.current;
+      await videoRef.current.play();
+      setCameraState("ready");
+    } catch {
+      setCameraState("blocked");
+    }
+  };
+
+  const capture = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video?.videoWidth) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    canvas.toBlob((blob) => onCapture(new File([blob], "quest-proof.jpg", { type: "image/jpeg" })), "image/jpeg", .88);
+  };
+
+  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+
+  return <div className="camera-utility"><video ref={videoRef} className={cameraState === "ready" ? "visible" : ""} muted playsInline /><canvas ref={canvasRef} hidden /><div className="camera-controls">{cameraState === "idle" && <button className="outline-btn" type="button" onClick={startCamera}><Camera size={16} /> Open camera</button>}{cameraState === "ready" && <button className="primary-btn small" type="button" onClick={capture}><Camera size={16} /> Capture proof</button>}{cameraState === "blocked" && <small className="camera-note">Camera unavailable. Use the upload below.</small>}{capturedProof && <span className="camera-success">✓ Captured</span>}</div></div>;
+}
+
+function CharacterForge({ character, saving, onSave, onClose, title = "Shape your chibi hero." }) {
+  const [draft, setDraft] = useState(character);
+  const options = { gender: ["male", "female"], hair: ["short", "long", "spiky", "crown", "bob", "braids"], mouth: ["smile", "grin", "calm", "brave", "surprise"], hairColor: ["brown", "black", "blonde", "pink", "blue"], skinColor: ["warm", "deep", "golden", "rose"], outfitColor: ["blue", "red", "green", "purple", "gold"] };
+  return <div className="modal-backdrop"><form className="modal-card character-modal" onSubmit={(event) => { event.preventDefault(); onSave(draft); }}><button className="modal-close" type="button" onClick={onClose}><X size={15} /></button><p className="kicker">CHARACTER FORGE</p><h2>{title}</h2><div className="chibi-preview"><ChibiCharacter character={draft} large /></div><div className="forge-options">{Object.entries(options).map(([key, values]) => <fieldset key={key}><legend>{key.replace("Color", " color")}</legend>{values.map((value) => <button className={draft[key] === value ? "selected" : ""} type="button" key={value} onClick={() => setDraft({ ...draft, [key]: value })}>{value}</button>)}</fieldset>)}</div><button className="primary-btn" type="submit" disabled={saving}>{saving ? "Saving hero..." : "Save character"}</button></form></div>;
 }
 
 function EmptyState({ title, text, action, onAction }) {
@@ -329,6 +399,8 @@ function App() {
   const [authMode, setAuthMode] = useState("login");
   const [form, setForm] = useState({ email: "", password: "", display_name: "", interests: "" });
   const [authState, setAuthState] = useState({ loading: false, error: "" });
+  const [registrationCharacter, setRegistrationCharacter] = useState({ gender: "female", hair: "bob", mouth: "smile", hairColor: "brown", skinColor: "warm", outfitColor: "purple" });
+  const [showRegistrationForge, setShowRegistrationForge] = useState(false);
   const authSectionRef = useRef(null);
 
   useEffect(() => {
@@ -351,7 +423,7 @@ function App() {
     setAuthState({ loading: true, error: "" });
     try {
       const isRegistering = authMode === "register";
-      const payload = isRegistering ? { email: form.email, password: form.password, display_name: form.display_name, interests: form.interests } : { email: form.email, password: form.password };
+      const payload = isRegistering ? { email: form.email, password: form.password, display_name: form.display_name, interests: form.interests, character_gender: registrationCharacter.gender, character_hair: registrationCharacter.hair, character_mouth: registrationCharacter.mouth, character_hair_color: registrationCharacter.hairColor, character_skin_color: registrationCharacter.skinColor, character_outfit_color: registrationCharacter.outfitColor } : { email: form.email, password: form.password };
       const response = await apiRequest(`/auth/${isRegistering ? "register" : "login"}`, { method: "POST", body: JSON.stringify(payload) });
       localStorage.setItem("life-rpg-token", response.access_token);
       localStorage.setItem("life-rpg-refresh-token", response.refresh_token);
@@ -364,7 +436,7 @@ function App() {
 
   if (screen === "game" && user) return <GamePage user={user} darkMode={darkMode} setDarkMode={setDarkMode} onLogout={() => { setUser(null); setScreen("landing"); }} />;
 
-  return <div className="landing-shell" style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}><div className="landing-wash" /><header className="landing-header"><button className="brand-lockup" type="button"><span className="brand-glyph">+</span><span><strong>REALMS</strong><small>OF ROUTINE</small></span></button><button className="round-control" type="button" onClick={() => setDarkMode(!darkMode)}>{darkMode ? "DAY" : "NIGHT"}</button></header><main className="landing-content"><section className="landing-copy"><p className="kicker">A LIFE RPG FOR THE REAL WORLD</p><h1>Restore the realm.<br /><em>Restore yourself.</em></h1><p>Turn the habits you keep postponing into a playable path of mastery. Every quest builds the character you are becoming.</p><div className="landing-ritual"><span className="ritual-line" /><div><strong>SEQUENCE 01 / THE AWAKENING</strong><small>Three attributes. Infinite progress.</small></div></div></section><section className="auth-panel" ref={authSectionRef}><div className="auth-panel-head"><p className="kicker">ENTER THE REALM</p><div className="mode-switch"><button className={authMode === "login" ? "active" : ""} type="button" onClick={() => switchAuthMode("login")}>Login</button><button className={authMode === "register" ? "active" : ""} type="button" onClick={() => switchAuthMode("register")}>New character</button></div></div><h2>{authMode === "login" ? "Welcome back, novice." : "Choose your first name."}</h2><p className="auth-subtitle">{authMode === "login" ? "Your next sequence is waiting." : "The broken realm needs a new kind of hero."}</p><form onSubmit={handleSubmit}>{authMode === "register" && <><input name="display_name" type="text" placeholder="Character name" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} minLength={2} required /><input name="interests" type="text" placeholder="Interests for bonus quests" value={form.interests} onChange={(event) => setForm({ ...form, interests: event.target.value })} maxLength={500} /></>}<input name="email" type="email" placeholder="Email address" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /><input name="password" type="password" placeholder={authMode === "register" ? "Create a password (8+ characters)" : "Password"} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={authMode === "register" ? 8 : 1} required />{authState.error && <p className="form-error" role="alert">{authState.error}</p>}<button className="primary-btn wide" type="submit" disabled={authState.loading}>{authState.loading ? "Opening the gate..." : authMode === "login" ? "Enter the realm" : "Begin the journey"}<span>-&gt;</span></button></form><div className="auth-footer"><span>SECURE SESSION</span><small>Progress is saved to your realm.</small></div></section></main></div>;
+  return <div className="landing-shell" style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}><div className="landing-wash" /><header className="landing-header"><button className="brand-lockup" type="button"><span className="brand-glyph">+</span><span><strong>REALMS</strong><small>OF ROUTINE</small></span></button><button className="round-control" type="button" onClick={() => setDarkMode(!darkMode)}>{darkMode ? "DAY" : "NIGHT"}</button></header><main className="landing-content"><section className="landing-copy"><p className="kicker">A LIFE RPG FOR THE REAL WORLD</p><h1>Restore the realm.<br /><em>Restore yourself.</em></h1><p>Turn the habits you keep postponing into a playable path of mastery. Every quest builds the character you are becoming.</p><div className="landing-ritual"><span className="ritual-line" /><div><strong>SEQUENCE 01 / THE AWAKENING</strong><small>Three attributes. Infinite progress.</small></div></div></section><section className="auth-panel" ref={authSectionRef}><div className="auth-panel-head"><p className="kicker">ENTER THE REALM</p><div className="mode-switch"><button className={authMode === "login" ? "active" : ""} type="button" onClick={() => switchAuthMode("login")}>Login</button><button className={authMode === "register" ? "active" : ""} type="button" onClick={() => switchAuthMode("register")}>New character</button></div></div><h2>{authMode === "login" ? "Welcome back, novice." : "Choose your first name."}</h2><p className="auth-subtitle">{authMode === "login" ? "Your next sequence is waiting." : "The broken realm needs a new kind of hero."}</p><form onSubmit={handleSubmit}>{authMode === "register" && <><input name="display_name" type="text" placeholder="Character name" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} minLength={2} required /><input name="interests" type="text" placeholder="Interests for bonus quests" value={form.interests} onChange={(event) => setForm({ ...form, interests: event.target.value })} maxLength={500} /><div className="registration-character"><ChibiCharacter character={registrationCharacter} /><div><span>YOUR CHIBI</span><strong>{registrationCharacter.gender} / {registrationCharacter.hair}</strong></div><button type="button" className="text-link" onClick={() => setShowRegistrationForge(true)}>Design character -&gt;</button></div></>}<input name="email" type="email" placeholder="Email address" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /><input name="password" type="password" placeholder={authMode === "register" ? "Create a password (8+ characters)" : "Password"} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={authMode === "register" ? 8 : 1} required />{authState.error && <p className="form-error" role="alert">{authState.error}</p>}<button className="primary-btn wide" type="submit" disabled={authState.loading}>{authState.loading ? "Opening the gate..." : authMode === "login" ? "Enter the realm" : "Begin the journey"}<span>-&gt;</span></button></form><div className="auth-footer"><span>SECURE SESSION</span><small>Progress is saved to your realm.</small></div></section></main>{showRegistrationForge && <CharacterForge character={registrationCharacter} title="Design your first hero." saving={false} onSave={(next) => { setRegistrationCharacter(next); setShowRegistrationForge(false); }} onClose={() => setShowRegistrationForge(false)} />}</div>;
 }
 
 export default App;
