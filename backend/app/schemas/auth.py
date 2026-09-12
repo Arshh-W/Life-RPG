@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -6,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 class RegisterRequest(BaseModel):
     email: EmailStr
     display_name: str = Field(min_length=2, max_length=80)
-    interests: str = Field(default="", max_length=500)
+    
     character_gender: str = Field(default="male", max_length=16)
     character_hair: str = Field(default="short", max_length=24)
     character_mouth: str = Field(default="smile", max_length=24)
@@ -14,6 +15,10 @@ class RegisterRequest(BaseModel):
     character_skin_color: str = Field(default="warm", max_length=24)
     character_outfit_color: str = Field(default="blue", max_length=24)
     password: str = Field(min_length=8, max_length=128)
+
+    # --- NEW ARCANE ONBOARDING FIELDS ---
+    profession: Optional[str] = Field(default=None, max_length=100)
+    grand_goal: Optional[str] = Field(default=None, max_length=255)
 
     @field_validator("display_name")
     @classmethod
@@ -36,6 +41,11 @@ class UserRead(BaseModel):
     email: EmailStr
     display_name: str
     interests: str
+    
+    # --- NEW ARCANE ONBOARDING FIELDS ---
+    profession: Optional[str]
+    grand_goal: Optional[str]
+    
     character_gender: str
     character_hair: str
     character_mouth: str

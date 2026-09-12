@@ -186,3 +186,83 @@ button { cursor: pointer; }
 @media (max-width: 420px) { .header-right { gap: 6px; }.coin-pill { padding: 8px; }.round-control { padding: 9px 8px; }.landing-copy > p:not(.kicker) { font-size: .95rem; }.auth-panel { padding: 22px; }.auth-panel-head { align-items: start; flex-direction: column; }.mode-switch { width: 100%; justify-content: space-between; }.realm-hero h1 { font-size: 2.65rem; }.trinity-card { align-items: start; flex-direction: column; }.boss-banner { padding: 15px; }.quest-card { grid-template-columns: 37px 1fr; gap: 10px; }.quest-mark { width: 37px; height: 37px; }.quest-reward, .quest-action { grid-column: 2; grid-row: auto; justify-self: start; }.quest-action { width: 100%; }.boss-reward { grid-column: 1/-1; } }
 .chibi.rogue .chibi-body { background: #a55e59; }
 .chibi { image-rendering: pixelated; filter: drop-shadow(0 5px 0 rgba(0,0,0,.22)); }.chibi.female .chibi-body { width: 38px; left: 18px; border-radius: 10px 10px 15px 15px; }.chibi.female .chibi-head { border-radius: 48% 48% 44% 44%; }.hair-bob .chibi-hair { height: 30px; border-radius: 48% 48% 35% 35%; }.hair-braids .chibi-hair { height: 27px; border-radius: 48% 48% 20% 20%; }.hair-braids .chibi-head::before, .hair-braids .chibi-head::after { content: ""; position: absolute; top: 10px; width: 9px; height: 27px; border: 2px solid #282d35; border-radius: 45%; background: #4d302a; }.hair-braids .chibi-head::before { left: -7px; }.hair-braids .chibi-head::after { right: -7px; }.hair-color-black .chibi-hair, .hair-color-black .chibi-head::before, .hair-color-black .chibi-head::after { background: #191b22; }.hair-color-blonde .chibi-hair, .hair-color-blonde .chibi-head::before, .hair-color-blonde .chibi-head::after { background: #e5bd58; }.hair-color-pink .chibi-hair, .hair-color-pink .chibi-head::before, .hair-color-pink .chibi-head::after { background: #d7799f; }.hair-color-blue .chibi-hair, .hair-color-blue .chibi-head::before, .hair-color-blue .chibi-head::after { background: #5b89bd; }.skin-deep .chibi-head, .skin-deep .chibi-arm { background: #8d4f38; }.skin-golden .chibi-head, .skin-golden .chibi-arm { background: #c88750; }.skin-rose .chibi-head, .skin-rose .chibi-arm { background: #f0a28c; }.outfit-red .chibi-body { background: #a55e59; }.outfit-green .chibi-body { background: #4d8b71; }.outfit-purple .chibi-body { background: #8068a8; }.outfit-gold .chibi-body { background: #b78635; }.mouth-surprise .chibi-mouth { width: 7px; height: 8px; left: 17px; border: 2px solid #8e4d4b; border-radius: 50%; }
+
+/* --- SOUL SHEET (PROFILE MODAL) --- */
+.profile-modal {
+  background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+  border: 1px solid #334155;
+  padding: 2rem;
+  color: white;
+}
+.profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 1.5rem;
+  margin-top: 1rem;
+}
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #1e3a8a;
+  border: 2px solid #3b82f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  margin-bottom: 1rem;
+}
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.stat-panel {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.stat-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* --- FACTION OVERWORLD MAP --- */
+.faction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.faction-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.faction-panel {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+}
+.faction-panel.restored { background: rgba(30, 41, 59, 0.8); }
+.faction-panel.restored.int { border-color: #60a5fa; box-shadow: 0 0 10px rgba(96, 165, 250, 0.2); }
+.faction-panel.restored.phy { border-color: #fb7185; box-shadow: 0 0 10px rgba(251, 113, 133, 0.2); }
+.faction-panel.restored.eq { border-color: #34d399; box-shadow: 0 0 10px rgba(52, 211, 153, 0.2); }

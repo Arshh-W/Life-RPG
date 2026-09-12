@@ -14,6 +14,9 @@ from app.api.progression import router as progression_router
 from app.api.tasks import router as tasks_router
 from app.core.config import settings
 from app.database import engine
+from app.api import territory
+
+
 
 
 @asynccontextmanager
@@ -51,7 +54,7 @@ async def health() -> dict[str, str]:
 async def database_exception_handler(_: Request, __: SQLAlchemyError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": "Database is temporarily unavailable"})
 
-
+app.include_router(territory.router, prefix="/api/territory", tags=["territory"])
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(bonus_router, prefix="/api/bonus-quests", tags=["bonus-quests"])
 app.include_router(boss_router, prefix="/api/boss-challenges", tags=["boss-challenges"])

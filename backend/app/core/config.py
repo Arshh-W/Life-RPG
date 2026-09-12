@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ai_gateway_base_url: str | None = Field(default=None, validation_alias=AliasChoices("NEON_AI_GATEWAY_BASE_URL", "AI_GATEWAY_BASE_URL"))
     ai_gateway_token: str | None = Field(default=None, validation_alias=AliasChoices("NEON_AI_GATEWAY_TOKEN", "AI_GATEWAY_TOKEN"))
     ai_gateway_model: str = Field(default="gemini-3-flash", validation_alias=AliasChoices("NEON_AI_GATEWAY_MODEL", "AI_GATEWAY_MODEL"))
-
+    gemini_api_key: str | None = None
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

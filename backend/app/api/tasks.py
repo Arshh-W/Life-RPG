@@ -4,7 +4,7 @@ from uuid import UUID
 from hashlib import sha256
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -16,6 +16,7 @@ from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 from app.services.progression import CATEGORY_RULES, level_for_xp
 
 router = APIRouter()
+
 async def owned_task(task_id: UUID, user: User, db: AsyncSession) -> Task:
     task = await db.scalar(select(Task).where(Task.id == task_id, Task.user_id == user.id))
     if task is None:
@@ -31,6 +32,21 @@ async def list_tasks(current_user: User = Depends(get_current_user), db: AsyncSe
 
 @router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 async def create_task(payload: TaskCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> Task:
+    # --- ENFORCE DAILY TRINITY LIMIT ---
+    if payload.is_mandatory:
+        active_mandatory_count = await db.scalar(
+            select(func.count()).select_from(Task).where(
+                Task.user_id == current_user.id,
+                Task.is_mandatory == True,
+                Task.is_completed == False
+            )
+        )
+        if active_mandatory_count >= 3:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="The Daily Trinity is full. You cannot have more than 3 active mandatory quests."
+            )
+
     rule = CATEGORY_RULES[payload.category.value]
     verification_required = payload.category == TaskCategory.physicality and payload.is_mandatory
     task = Task(user_id=current_user.id, title=payload.title.strip(), description=payload.description, category=payload.category, xp_reward=rule.xp_reward, is_mandatory=payload.is_mandatory, verification_required=verification_required, verification_status="pending" if verification_required else "not_required")
@@ -44,12 +60,29 @@ async def create_task(payload: TaskCreate, current_user: User = Depends(get_curr
 async def update_task(task_id: UUID, payload: TaskUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> Task:
     task = await owned_task(task_id, current_user, db)
     updates = payload.model_dump(exclude_unset=True)
+    
+    # --- ENFORCE DAILY TRINITY LIMIT ON UPDATE ---
+    if updates.get("is_mandatory") and not task.is_mandatory:
+        active_mandatory_count = await db.scalar(
+            select(func.count()).select_from(Task).where(
+                Task.user_id == current_user.id,
+                Task.is_mandatory == True,
+                Task.is_completed == False
+            )
+        )
+        if active_mandatory_count >= 3:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="The Daily Trinity is full. You cannot upgrade this to a mandatory quest."
+            )
+
     if "title" in updates:
         updates["title"] = updates["title"].strip()
     if "category" in updates:
         updates["xp_reward"] = CATEGORY_RULES[updates["category"].value].xp_reward
-        updates["verification_required"] = updates["category"] == TaskCategory.physicality and task.is_mandatory
+        updates["verification_required"] = updates["category"] == TaskCategory.physicality and updates.get("is_mandatory", task.is_mandatory)
         updates["verification_status"] = "pending" if updates["verification_required"] else "not_required"
+        
     for field, value in updates.items():
         setattr(task, field, value)
     await db.commit()

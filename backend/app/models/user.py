@@ -15,6 +15,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(80))
     interests: Mapped[str] = mapped_column(String(500), default="")
+    
+    # --- NEW ARCANE ONBOARDING FIELDS ---
+    profession: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    grand_goal: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    
     character_gender: Mapped[str] = mapped_column(String(16), default="male")
     character_hair: Mapped[str] = mapped_column(String(24), default="short")
     character_mouth: Mapped[str] = mapped_column(String(24), default="smile")

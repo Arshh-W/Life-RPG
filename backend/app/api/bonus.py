@@ -1,8 +1,12 @@
 import json
 import re
+from typing import Literal
 
-import httpx
 from fastapi import APIRouter, Depends
+from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
@@ -11,9 +15,16 @@ from app.models.task import TaskCategory
 from app.models.user import User
 from app.schemas.bonus import BonusQuestRead, BonusQuestRequest
 from app.services.progression import CATEGORY_RULES
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
+
+
+# Schema enforced directly at the model output layer
+class GeneratedQuestSchema(BaseModel):
+    title: str = Field(description="Actionable title for the quest")
+    description: str = Field(description="Concise instructions achievable under 30 minutes")
+    category: Literal["intelligence", "physicality", "social"]
+    rationale: str = Field(description="Explanation connecting the quest to user stats/goals")
 
 
 def fallback_quest(user: User, interests: str) -> BonusQuestRead:
@@ -31,38 +42,77 @@ def fallback_quest(user: User, interests: str) -> BonusQuestRead:
         title = f"Share the spark of {interest}"
         description = f"Send one thoughtful message or contribution inspired by {interest} to strengthen a real connection."
     rule = CATEGORY_RULES[category.value]
-    return BonusQuestRead(title=title, description=description, category=category, xp_reward=rule.xp_reward, coin_reward=rule.coin_reward, rationale="This quest balances your current focus tree with an interest you chose.", generated_by="realm fallback")
+    return BonusQuestRead(
+        title=title,
+        description=description,
+        category=category,
+        xp_reward=rule.xp_reward,
+        coin_reward=rule.coin_reward,
+        rationale="This quest balances your current focus tree with an interest you chose.",
+        generated_by="realm fallback",
+    )
 
 
-async def gateway_quest(user: User, interests: str) -> BonusQuestRead | None:
-    if not settings.ai_gateway_base_url or not settings.ai_gateway_token:
+async def gemini_quest(user: User, interests: str) -> BonusQuestRead | None:
+    api_key = getattr(settings, "gemini_api_key", None)
+    if not api_key:
         return None
-    prompt = f"""Create one concise real-world bonus quest for a life RPG player.
-Player profile: level {user.level}, intelligence {user.intelligence}, strength {user.strength}, emotional intelligence {user.emotional_intelligence}, discipline {user.discipline}, health {user.health}.
-Player interests: {interests or 'not provided'}.
-Return JSON only with title, description, category, and rationale. Category must be intelligence, physicality, or social. The quest must be achievable in under 30 minutes, specific, positive, and not repeat a generic chore."""
+
+    client = genai.Client(api_key=api_key)
+
+    prompt = f"""You are the Arcane Oracle of a gritty RPG system.
+Create one tailored, high-impact real-world quest for this hunter:
+- Profession/Craft: {getattr(user, 'profession', 'Novice')}
+- Ultimate Ambition: {getattr(user, 'grand_goal', 'Ascension')}
+- Primary Interests: {interests or 'general mastery'}
+- Current Stats: Level {user.level}, INT {user.intelligence}, PHY {user.strength}, EQ {user.emotional_intelligence}, DIS {user.discipline}, HP {user.health}/100.
+
+Requirements:
+1. Target their lowest attribute to force balanced growth, or build directly on their craft.
+2. Must be achievable in under 30 minutes in the real world.
+3. Must sound like an urgent system directive, not a dull everyday chore."""
+
     try:
-        async with httpx.AsyncClient(timeout=12) as client:
-            response = await client.post(
-                f"{settings.ai_gateway_base_url.rstrip('/')}/v1/chat/completions",
-                headers={"Authorization": f"Bearer {settings.ai_gateway_token}"},
-                json={"model": settings.ai_gateway_model, "temperature": 0.8, "messages": [{"role": "user", "content": prompt}]},
-            )
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-            content = re.sub(r"^```json\s*|\s*```$", "", content.strip())
-            data = json.loads(content)
-            category = TaskCategory(data["category"])
-            rule = CATEGORY_RULES[category.value]
-            return BonusQuestRead(title=data["title"], description=data["description"], category=category, xp_reward=rule.xp_reward, coin_reward=rule.coin_reward, rationale=data["rationale"], generated_by=settings.ai_gateway_model)
-    except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=GeneratedQuestSchema,
+                temperature=0.7,
+            ),
+        )
+
+        if not response.text:
+            return None
+
+        data = json.loads(response.text)
+        category = TaskCategory(data["category"])
+        rule = CATEGORY_RULES[category.value]
+
+        return BonusQuestRead(
+            title=data["title"],
+            description=data["description"],
+            category=category,
+            xp_reward=rule.xp_reward,
+            coin_reward=rule.coin_reward,
+            rationale=data["rationale"],
+            generated_by="Gemini 2.5 Flash",
+        )
+    except Exception as exc:
+        print(f"[Oracle Warning] Gemini API call failed: {exc}")
         return None
 
 
 @router.post("/generate", response_model=BonusQuestRead)
-async def generate_bonus_quest(payload: BonusQuestRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> BonusQuestRead:
+async def generate_bonus_quest(
+    payload: BonusQuestRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BonusQuestRead:
     interests = payload.interests.strip() or current_user.interests.strip()
     if payload.interests.strip() and payload.interests.strip() != current_user.interests:
         current_user.interests = payload.interests.strip()
         await db.commit()
-    return await gateway_quest(current_user, interests) or fallback_quest(current_user, interests)
+
+    return await gemini_quest(current_user, interests) or fallback_quest(current_user, interests)

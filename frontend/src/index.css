@@ -1,6 +1,43 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-:root { font-family: 'Space Grotesk', 'Segoe UI', sans-serif; color: #f5f0e7; background: #151b24; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
-* { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
-#root { min-height: 100vh; }
+/* Solo Leveling System Theme Enhancements */
+:root {
+  --system-bg: #0b0f19;
+  --system-panel: #111827;
+  --system-border: #3b82f6;
+  --system-glow: rgba(59, 130, 246, 0.5);
+  --system-text: #e2e8f0;
+  --system-accent: #60a5fa;
+  --danger-red: #ef4444;
+}
+
+body {
+  background-color: var(--system-bg);
+  color: var(--system-text);
+  font-family: 'Courier New', Courier, monospace; /* Gives a retro/system-terminal UI feel */
+}
+
+/* System Window Panels */
+.rpg-panel {
+  background: var(--system-panel);
+  border: 1px solid var(--system-border);
+  box-shadow: 0 0 15px var(--system-glow);
+  border-radius: 8px;
+}
+
+/* Glowing System Headers */
+.rpg-header {
+  color: var(--system-accent);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px var(--system-glow);
+}
+
+/* Hunter Rank Badge Styles */
+.rank-badge {
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  border: 1px silve solid;
+  color: #fff;
+  font-weight: bold;
+  padding: 4px 12px;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+}
