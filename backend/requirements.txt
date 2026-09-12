@@ -6,3 +6,4 @@ python-jose[cryptography]>=3.3,<4.0
 pwdlib[argon2]>=0.2,<1.0
 alembic>=1.13,<2.0
 psycopg2
+httpx>=0.27,<1.0

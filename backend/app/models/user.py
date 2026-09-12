@@ -14,6 +14,7 @@ class User(Base):
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(80))
+    interests: Mapped[str] = mapped_column(String(500), default="")
     password_hash: Mapped[str] = mapped_column(String(255))
     xp: Mapped[int] = mapped_column(Integer, default=0)
     level: Mapped[int] = mapped_column(Integer, default=1)

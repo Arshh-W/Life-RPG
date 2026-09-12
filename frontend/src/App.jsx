@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { apiRequest } from "./api";
-import { Brain, Check, Coins, Dumbbell, Gem, HeartHandshake, Moon, Plus, ScrollText, Sparkles, Sun } from "lucide-react";
+import { BookOpen, Brain, Check, Coins, Dumbbell, Gem, HeartHandshake, Moon, Plus, ScrollText, Sparkles, Sun, WandSparkles } from "lucide-react";
 
 import darkBg from "./assets/dark-bg.jpeg";
 import lightBg from "./assets/light-bg.jpeg";
@@ -15,7 +15,7 @@ const categories = {
 const emptyGameState = { loading: true, error: "", profile: null, tasks: [], boss: null, shop: [], inventory: [] };
 
 function Icon({ children }) {
-  const iconMap = { "+": Plus, "$": Coins, OK: Check, Q: ScrollText, V: Gem, INT: Brain, PHY: Dumbbell, EQ: HeartHandshake, DAY: Sun, NIGHT: Moon };
+  const iconMap = { "+": Plus, "$": Coins, OK: Check, Q: ScrollText, V: Gem, O: WandSparkles, C: BookOpen, INT: Brain, PHY: Dumbbell, EQ: HeartHandshake, DAY: Sun, NIGHT: Moon };
   const Glyph = iconMap[children] || Sparkles;
   return <Glyph className="ui-icon" aria-hidden="true" strokeWidth={1.8} />;
 }
@@ -25,6 +25,8 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   const [gameState, setGameState] = useState(emptyGameState);
   const [actionState, setActionState] = useState("");
   const [questFilter, setQuestFilter] = useState("all");
+  const [bonusQuest, setBonusQuest] = useState(null);
+  const [bonusInterests, setBonusInterests] = useState(user.interests || "");
   const [showQuestForm, setShowQuestForm] = useState(false);
   const [verificationTask, setVerificationTask] = useState(null);
   const [newQuest, setNewQuest] = useState({ title: "", category: "intelligence", is_mandatory: false });
@@ -146,6 +148,36 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
     }
   };
 
+  const generateBonusQuest = async (event) => {
+    event?.preventDefault();
+    setActionState("generate-bonus");
+    try {
+      const generated = await apiRequest("/bonus-quests/generate", { method: "POST", body: JSON.stringify({ interests: bonusInterests }) });
+      setBonusQuest(generated);
+      notify(generated.generated_by === "realm fallback" ? "The local Oracle found a quest." : "The Oracle has spoken.");
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setActionState("");
+    }
+  };
+
+  const acceptBonusQuest = async () => {
+    if (!bonusQuest) return;
+    setActionState("accept-bonus");
+    try {
+      await apiRequest("/tasks", { method: "POST", body: JSON.stringify({ title: bonusQuest.title, description: bonusQuest.description, category: bonusQuest.category, is_mandatory: false }) });
+      setBonusQuest(null);
+      await loadGame();
+      setActiveView("quests");
+      notify("Bonus quest added to your board.");
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setActionState("");
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("life-rpg-token");
     localStorage.removeItem("life-rpg-refresh-token");
@@ -170,7 +202,7 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
     );
   };
 
-  const activeTabLabel = { realm: "The Realm", quests: "Quest Board", vault: "Reward Vault" }[activeView];
+  const activeTabLabel = { realm: "The Realm", quests: "Quest Board", oracle: "The Oracle", vault: "Reward Vault", codex: "The Codex" }[activeView];
 
   return (
     <div className={`game-shell ${darkMode ? "night" : "day"}`} style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}>
@@ -196,7 +228,9 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
           <nav className="game-nav" aria-label="Game sections">
             <button className={activeView === "realm" ? "active" : ""} type="button" onClick={() => setActiveView("realm")}><Icon>+</Icon>The Realm</button>
             <button className={activeView === "quests" ? "active" : ""} type="button" onClick={() => setActiveView("quests")}><Icon>Q</Icon>Quest Board<span>{tasks.filter((task) => !task.is_completed).length}</span></button>
+            <button className={activeView === "oracle" ? "active" : ""} type="button" onClick={() => setActiveView("oracle")}><Icon>O</Icon>The Oracle</button>
             <button className={activeView === "vault" ? "active" : ""} type="button" onClick={() => setActiveView("vault")}><Icon>V</Icon>Reward Vault</button>
+            <button className={activeView === "codex" ? "active" : ""} type="button" onClick={() => setActiveView("codex")}><Icon>C</Icon>The Codex</button>
           </nav>
           <div className="sidebar-lore"><span className="lore-mark">//</span><p>Every ordinary action is a spell. Keep the chain alive.</p></div>
           <button className="logout-link" type="button" onClick={logout}>Exit the realm</button>
@@ -215,7 +249,9 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
               <div className="quest-board">{filteredTasks.length ? filteredTasks.map(renderQuestRow) : <EmptyState title="The board is quiet" text="Add a quest and give the realm a direction." action="Create quest" onAction={() => setShowQuestForm(true)} />}</div>
             </section>
           )}
+          {activeView === "oracle" && <OracleView interests={bonusInterests} setInterests={setBonusInterests} bonusQuest={bonusQuest} loading={actionState === "generate-bonus"} accepting={actionState === "accept-bonus"} onGenerate={generateBonusQuest} onAccept={acceptBonusQuest} onDiscard={() => setBonusQuest(null)} profile={profile} />}
           {activeView === "vault" && <VaultView shop={gameState.shop} inventory={gameState.inventory} coins={profile?.coins ?? user.coins} actionState={actionState} onPurchase={purchaseItem} />}
+          {activeView === "codex" && <CodexView profile={profile} user={user} tasks={tasks} />}
         </main>
       </div>
 
@@ -260,6 +296,16 @@ function RealmView({ profile, user, tasks, mandatoryTasks, boss, actionState, on
   </section>;
 }
 
+function OracleView({ interests, setInterests, bonusQuest, loading, accepting, onGenerate, onAccept, onDiscard, profile }) {
+  const category = bonusQuest ? categories[bonusQuest.category] : categories.intelligence;
+  return <section className="view-section oracle-view"><div className="oracle-hero"><div><p className="kicker">THE PERSONAL QUEST ENGINE</p><h1>Ask the Oracle.</h1><p>Tell the realm what pulls at your curiosity. The Oracle will shape it into one focused bonus quest that strengthens the stat you need most.</p></div><div className="oracle-eye"><span>✦</span><small>AI<br />ACTIVE</small></div></div><div className="oracle-grid"><form className="oracle-form" onSubmit={onGenerate}><label><span className="kicker">YOUR INTERESTS</span><textarea value={interests} onChange={(event) => setInterests(event.target.value)} placeholder="e.g. music production, climbing, astronomy, cooking" maxLength={500} /></label><div className="oracle-profile"><span>READING YOUR PROFILE</span><div><b>LV. {profile?.level ?? 1}</b><b>INT {profile?.attributes?.intelligence ?? 1}</b><b>PHY {profile?.attributes?.strength ?? 1}</b><b>EQ {profile?.attributes?.emotional_intelligence ?? 1}</b></div></div><button className="primary-btn" type="submit" disabled={loading}><Icon>O</Icon>{loading ? "Consulting the stars..." : "Generate bonus quest"}</button></form><div className="oracle-result">{bonusQuest ? <article className="bonus-scroll"><div className="scroll-stamp"><Icon>O</Icon></div><div className="quest-meta"><span>{category.label}</span><strong>ORACLE BONUS</strong></div><h2>{bonusQuest.title}</h2><p>{bonusQuest.description}</p><div className="bonus-reward"><span>REWARD</span><strong>+{bonusQuest.xp_reward} XP</strong><small>+{bonusQuest.coin_reward} coins</small></div><div className="oracle-rationale"><span>WHY THIS QUEST</span><p>{bonusQuest.rationale}</p><small>Generated by {bonusQuest.generated_by}</small></div><div className="bonus-actions"><button className="primary-btn" type="button" disabled={accepting} onClick={onAccept}>{accepting ? "Inscribing..." : "Accept quest"}</button><button className="text-link" type="button" onClick={onDiscard}>Ask again</button></div></article> : <div className="oracle-empty"><div className="constellation">* . + . *<br />. + . + .<br />+ . * . +</div><h2>A quest is waiting in the dark.</h2><p>Share an interest and let your real life become the material for your next adventure.</p></div>}</div></div></section>;
+}
+
+function CodexView({ profile, user, tasks }) {
+  const completed = tasks.filter((task) => task.is_completed).length;
+  return <section className="view-section codex-view"><div className="view-intro"><div><p className="kicker">FIELD GUIDE / PLAYER ONE</p><h1>The Codex</h1><p>Your living record of the realm, its rules, and the character you are building.</p></div><div className="codex-seal">✦</div></div><div className="codex-grid"><article className="codex-page character-page"><p className="kicker">CHARACTER SHEET</p><h2>{user.display_name}</h2><p className="codex-class">The recovering novice</p><div className="codex-divider" /><div className="codex-facts"><div><span>LEVEL</span><strong>{profile?.level ?? user.level}</strong></div><div><span>XP</span><strong>{profile?.xp ?? user.xp}</strong></div><div><span>STREAK</span><strong>{profile?.streak_count ?? user.streak_count}</strong></div><div><span>QUESTS CLEARED</span><strong>{completed}</strong></div></div><p className="codex-quote">“A grand life is assembled from small promises kept.”</p></article><article className="codex-page rules-page"><p className="kicker">THE THREE LAWS</p><div className="law"><span>01</span><div><h3>Intent becomes XP</h3><p>Choose a real action. The realm only rewards what you actually do.</p></div></div><div className="law"><span>02</span><div><h3>Balance builds power</h3><p>Intelligence, Physicality, and Social quests grow a complete character.</p></div></div><div className="law"><span>03</span><div><h3>Consistency defeats bosses</h3><p>The Daily Trinity turns a single good day into a streak.</p></div></div></article><article className="codex-page map-page"><p className="kicker">KNOWN LANDS</p><div className="codex-map"><span>🏰</span><span>🌲</span><span>💎</span><span>🧙</span><span>🐉</span></div><h2>The Shattered Meadows</h2><p>Zone 01 is only the beginning. Every cleared quest reveals more of the path.</p></article></div></section>;
+}
+
 function VaultView({ shop, inventory, coins, actionState, onPurchase }) {
   return <section className="view-section"><div className="view-intro"><div><p className="kicker">THE ECONOMY</p><h1>Reward Vault</h1><p>Spend your hard-won coins on artifacts for the road ahead.</p></div><div className="vault-balance"><span>YOUR BALANCE</span><strong><Icon>$</Icon>{coins}</strong></div></div><div className="vault-grid"><div className="shop-catalog">{shop.map((item) => <article className={`item-card ${item.rarity}`} key={item.id}><div className="item-art"><span>{item.rarity === "epic" ? "*" : item.rarity === "rare" ? "<>" : "o"}</span></div><div className="item-body"><span className="rarity-label">{item.rarity}</span><h2>{item.name}</h2><p>{item.description}</p><div className="item-footer"><strong><Icon>$</Icon>{item.cost}</strong><button className="primary-btn small" type="button" disabled={actionState === `buy-${item.id}` || coins < item.cost} onClick={() => onPurchase(item)}>{actionState === `buy-${item.id}` ? "Buying" : coins < item.cost ? "Need coins" : "Claim item"}</button></div></div></article>)}</div><div className="inventory-panel"><div className="section-heading"><div><p className="kicker">YOUR COLLECTION</p><h2>Inventory</h2></div><span>{inventory.length} items</span></div>{inventory.length ? inventory.map((item) => <div className="inventory-row" key={item.id}><span className="inventory-icon">+</span><div><strong>{item.name}</strong><small>{item.rarity}</small></div><b>x{item.owned_quantity}</b></div>) : <EmptyState title="Nothing claimed yet" text="Complete quests to earn coins and unlock artifacts." />}</div></div></section>;
 }
@@ -281,7 +327,7 @@ function App() {
   const [screen, setScreen] = useState(localStorage.getItem("life-rpg-token") ? "game" : "landing");
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("login");
-  const [form, setForm] = useState({ email: "", password: "", display_name: "" });
+  const [form, setForm] = useState({ email: "", password: "", display_name: "", interests: "" });
   const [authState, setAuthState] = useState({ loading: false, error: "" });
   const authSectionRef = useRef(null);
 
@@ -305,7 +351,7 @@ function App() {
     setAuthState({ loading: true, error: "" });
     try {
       const isRegistering = authMode === "register";
-      const payload = isRegistering ? { email: form.email, password: form.password, display_name: form.display_name } : { email: form.email, password: form.password };
+      const payload = isRegistering ? { email: form.email, password: form.password, display_name: form.display_name, interests: form.interests } : { email: form.email, password: form.password };
       const response = await apiRequest(`/auth/${isRegistering ? "register" : "login"}`, { method: "POST", body: JSON.stringify(payload) });
       localStorage.setItem("life-rpg-token", response.access_token);
       localStorage.setItem("life-rpg-refresh-token", response.refresh_token);
@@ -318,7 +364,7 @@ function App() {
 
   if (screen === "game" && user) return <GamePage user={user} darkMode={darkMode} setDarkMode={setDarkMode} onLogout={() => { setUser(null); setScreen("landing"); }} />;
 
-  return <div className="landing-shell" style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}><div className="landing-wash" /><header className="landing-header"><button className="brand-lockup" type="button"><span className="brand-glyph">+</span><span><strong>REALMS</strong><small>OF ROUTINE</small></span></button><button className="round-control" type="button" onClick={() => setDarkMode(!darkMode)}>{darkMode ? "DAY" : "NIGHT"}</button></header><main className="landing-content"><section className="landing-copy"><p className="kicker">A LIFE RPG FOR THE REAL WORLD</p><h1>Restore the realm.<br /><em>Restore yourself.</em></h1><p>Turn the habits you keep postponing into a playable path of mastery. Every quest builds the character you are becoming.</p><div className="landing-ritual"><span className="ritual-line" /><div><strong>SEQUENCE 01 / THE AWAKENING</strong><small>Three attributes. Infinite progress.</small></div></div></section><section className="auth-panel" ref={authSectionRef}><div className="auth-panel-head"><p className="kicker">ENTER THE REALM</p><div className="mode-switch"><button className={authMode === "login" ? "active" : ""} type="button" onClick={() => switchAuthMode("login")}>Login</button><button className={authMode === "register" ? "active" : ""} type="button" onClick={() => switchAuthMode("register")}>New character</button></div></div><h2>{authMode === "login" ? "Welcome back, novice." : "Choose your first name."}</h2><p className="auth-subtitle">{authMode === "login" ? "Your next sequence is waiting." : "The broken realm needs a new kind of hero."}</p><form onSubmit={handleSubmit}>{authMode === "register" && <input name="display_name" type="text" placeholder="Character name" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} minLength={2} required />}<input name="email" type="email" placeholder="Email address" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /><input name="password" type="password" placeholder={authMode === "register" ? "Create a password (8+ characters)" : "Password"} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={authMode === "register" ? 8 : 1} required />{authState.error && <p className="form-error" role="alert">{authState.error}</p>}<button className="primary-btn wide" type="submit" disabled={authState.loading}>{authState.loading ? "Opening the gate..." : authMode === "login" ? "Enter the realm" : "Begin the journey"}<span>-&gt;</span></button></form><div className="auth-footer"><span>SECURE SESSION</span><small>Progress is saved to your realm.</small></div></section></main></div>;
+  return <div className="landing-shell" style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}><div className="landing-wash" /><header className="landing-header"><button className="brand-lockup" type="button"><span className="brand-glyph">+</span><span><strong>REALMS</strong><small>OF ROUTINE</small></span></button><button className="round-control" type="button" onClick={() => setDarkMode(!darkMode)}>{darkMode ? "DAY" : "NIGHT"}</button></header><main className="landing-content"><section className="landing-copy"><p className="kicker">A LIFE RPG FOR THE REAL WORLD</p><h1>Restore the realm.<br /><em>Restore yourself.</em></h1><p>Turn the habits you keep postponing into a playable path of mastery. Every quest builds the character you are becoming.</p><div className="landing-ritual"><span className="ritual-line" /><div><strong>SEQUENCE 01 / THE AWAKENING</strong><small>Three attributes. Infinite progress.</small></div></div></section><section className="auth-panel" ref={authSectionRef}><div className="auth-panel-head"><p className="kicker">ENTER THE REALM</p><div className="mode-switch"><button className={authMode === "login" ? "active" : ""} type="button" onClick={() => switchAuthMode("login")}>Login</button><button className={authMode === "register" ? "active" : ""} type="button" onClick={() => switchAuthMode("register")}>New character</button></div></div><h2>{authMode === "login" ? "Welcome back, novice." : "Choose your first name."}</h2><p className="auth-subtitle">{authMode === "login" ? "Your next sequence is waiting." : "The broken realm needs a new kind of hero."}</p><form onSubmit={handleSubmit}>{authMode === "register" && <><input name="display_name" type="text" placeholder="Character name" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} minLength={2} required /><input name="interests" type="text" placeholder="Interests for bonus quests" value={form.interests} onChange={(event) => setForm({ ...form, interests: event.target.value })} maxLength={500} /></>}<input name="email" type="email" placeholder="Email address" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /><input name="password" type="password" placeholder={authMode === "register" ? "Create a password (8+ characters)" : "Password"} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={authMode === "register" ? 8 : 1} required />{authState.error && <p className="form-error" role="alert">{authState.error}</p>}<button className="primary-btn wide" type="submit" disabled={authState.loading}>{authState.loading ? "Opening the gate..." : authMode === "login" ? "Enter the realm" : "Begin the journey"}<span>-&gt;</span></button></form><div className="auth-footer"><span>SECURE SESSION</span><small>Progress is saved to your realm.</small></div></section></main></div>;
 }
 
 export default App;

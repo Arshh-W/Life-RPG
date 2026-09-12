@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.auth import router as auth_router
+from app.api.bonus import router as bonus_router
 from app.api.boss import router as boss_router
 from app.api.economy import router as economy_router
 from app.api.progression import router as progression_router
@@ -52,6 +53,7 @@ async def database_exception_handler(_: Request, __: SQLAlchemyError) -> JSONRes
 
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(bonus_router, prefix="/api/bonus-quests", tags=["bonus-quests"])
 app.include_router(boss_router, prefix="/api/boss-challenges", tags=["boss-challenges"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(progression_router, prefix="/api/progression", tags=["progression"])

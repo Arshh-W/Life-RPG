@@ -34,7 +34,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
     existing_user = await db.scalar(select(User).where(User.email == payload.email.lower()))
     if existing_user is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
-    user = User(email=payload.email.lower(), display_name=payload.display_name.strip(), password_hash=hash_password(payload.password))
+    user = User(email=payload.email.lower(), display_name=payload.display_name.strip(), interests=payload.interests.strip(), password_hash=hash_password(payload.password))
     db.add(user)
     try:
         await db.commit()
