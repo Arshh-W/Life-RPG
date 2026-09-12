@@ -20,6 +20,40 @@ function Icon({ children }) {
   return <Glyph className="ui-icon" aria-hidden="true" strokeWidth={1.8} />;
 }
 
+// --- AEGIS PROTOCOL LOGO COMPONENT ---
+function AegisLogo({ className = "w-8 h-8" }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+      <defs>
+        <linearGradient id="legendaryGradJSX" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fbbf24" />
+          <stop offset="50%" stopColor="#f59e0b" />
+          <stop offset="100%" stopColor="#ea580c" />
+        </linearGradient>
+        <linearGradient id="etherealGradJSX" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#a855f7" />
+        </linearGradient>
+        <filter id="rpgGlowJSX" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+        <filter id="coreGlowJSX" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+
+      <polygon points="50,5 89,27 89,73 50,95 11,73 11,27" fill="none" stroke="url(#legendaryGradJSX)" strokeWidth="2.5" filter="url(#rpgGlowJSX)" opacity="0.9"/>
+      <circle cx="50" cy="50" r="32" fill="none" stroke="url(#etherealGradJSX)" strokeWidth="1.5" strokeDasharray="6 4" opacity="0.8" />
+      <path d="M50 0 L52 40 L90 50 L52 60 L50 100 L48 60 L10 50 L48 40 Z" fill="url(#legendaryGradJSX)" opacity="0.25" filter="url(#rpgGlowJSX)"/>
+      <polygon points="50,20 65,50 50,80 35,50" fill="url(#etherealGradJSX)" filter="url(#coreGlowJSX)" />
+      <polygon points="50,20 65,50 50,50" fill="#ffffff" opacity="0.4" />
+      <polygon points="50,20 50,50 35,50" fill="#e0e7ff" opacity="0.15" />
+    </svg>
+  );
+}
+
 // --- PROFILE MODAL (THE SOUL SHEET) ---
 function ProfileModal({ user, profile, onClose, onLogout }) {
   const stats = profile?.attributes || { intelligence: user.intelligence, discipline: user.discipline, strength: user.strength, health: user.health, emotional_intelligence: user.emotional_intelligence };
@@ -90,25 +124,37 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   
-  // Create audio objects (ensure these exist in public/assets/)
-  const bgmAudio = useRef(new Audio('/assets/bgm.mp3'));
-  const sfxAudio = useRef(new Audio('/assets/levelup.mp3'));
-  
-  // Track previous level to detect promotions
+  const bgmAudio = useRef(null);
+  const sfxAudio = useRef(null);
   const previousLevel = useRef(null);
 
   useEffect(() => {
+    bgmAudio.current = new Audio('/assets/bgm.mp3');
     bgmAudio.current.loop = true;
     bgmAudio.current.volume = 0.4;
     
+    sfxAudio.current = new Audio('/assets/levelup.mp3');
+    
+    return () => {
+      if (bgmAudio.current) {
+        bgmAudio.current.pause();
+        bgmAudio.current.src = "";
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bgmAudio.current) return;
+    
     if (audioEnabled) {
-      bgmAudio.current.play().catch(() => setAudioEnabled(false));
+      bgmAudio.current.play().catch((err) => {
+        console.error("Audio playback blocked or file missing:", err);
+        notify("Add 'bgm.mp3' to your public/assets/ folder!", "error");
+        setAudioEnabled(false);
+      });
     } else {
       bgmAudio.current.pause();
     }
-    
-    // Cleanup on unmount
-    return () => bgmAudio.current.pause();
   }, [audioEnabled]);
 
   const notify = (message, tone = "success") => {
@@ -141,14 +187,12 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
     if (gameState.profile?.level) {
       const currentLvl = gameState.profile.level;
       
-      // If previousLevel is set, and current level is higher, trigger Ascension
       if (previousLevel.current !== null && currentLvl > previousLevel.current) {
-        if (audioEnabled) {
+        if (audioEnabled && sfxAudio.current) {
           sfxAudio.current.currentTime = 0;
           sfxAudio.current.play().catch(e => console.log("SFX blocked:", e));
         }
         setShowLevelUp(true);
-        // Clear animation overlay after 3.5 seconds
         setTimeout(() => setShowLevelUp(false), 3500);
       }
       
@@ -332,7 +376,6 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
   return (
     <div className={`game-shell ${darkMode ? "night" : "day"}`} style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}>
       
-      {/* LEVEL UP SPECTACLE */}
       {showLevelUp && (
         <div className="level-up-overlay">
           <div className="level-up-text">LEVEL UP</div>
@@ -341,30 +384,31 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
 
       {isLoggingOut && (
         <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity 1s ease' }}>
-          <p style={{ color: '#3b82f6', fontFamily: 'monospace', letterSpacing: '0.3em' }}>THE SYSTEM SLUMBERS...</p>
+          <p style={{ color: '#fbbf24', fontFamily: 'monospace', letterSpacing: '0.3em' }}>THE SYSTEM SLUMBERS...</p>
         </div>
       )}
 
       <div className="game-wash" />
       
-      <header className="game-header" style={{ borderBottom: '1px solid rgba(30, 58, 138, 0.5)', background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 40, padding: '0.75rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button className="brand-lockup" type="button" onClick={() => setActiveView("realm")} style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-          <span className="brand-glyph" style={{ color: '#3b82f6', fontSize: '1.25rem', fontWeight: 'bold' }}>✦</span>
+      <header className="game-header" style={{ borderBottom: '1px solid #1a1a2e', background: 'rgba(5, 5, 10, 0.8)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 40, padding: '0.5rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button className="brand-lockup" type="button" onClick={() => setActiveView("realm")} style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer' }}>
+          <div style={{ width: '36px', height: '36px', display: 'flex', alignItems: 'center' }}>
+            <AegisLogo className="w-full h-full" />
+          </div>
           <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-            <strong style={{ color: '#fff', letterSpacing: '0.1em', fontSize: '0.875rem' }}>REALMS</strong>
-            <small style={{ color: '#60a5fa', fontSize: '0.5rem', letterSpacing: '0.1em' }}>OF ROUTINE</small>
+            <strong style={{ color: '#fff', letterSpacing: '0.2em', fontSize: '0.75rem', fontWeight: 800 }}>AEGIS</strong>
+            <small style={{ color: '#8b5cf6', fontSize: '0.45rem', letterSpacing: '0.25em', fontWeight: 600 }}>PROTOCOL</small>
           </span>
         </button>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(30, 41, 59, 0.8)', padding: '0.35rem 0.75rem', borderRadius: '4px', border: '1px solid rgba(202, 138, 4, 0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(5, 5, 10, 0.8)', padding: '0.35rem 0.75rem', borderRadius: '4px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
             <Icon>$</Icon>
-            <span style={{ color: '#facc15', fontFamily: 'monospace', fontWeight: 'bold' }}>{profile?.coins ?? user.coins}</span>
+            <span style={{ color: '#fbbf24', fontFamily: 'monospace', fontWeight: 'bold' }}>{profile?.coins ?? user.coins}</span>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '1px solid #334155', paddingLeft: '1.5rem' }}>
-            {/* AUDIO TOGGLE */}
-            <button className="round-control" type="button" aria-label="Toggle audio" onClick={() => setAudioEnabled(!audioEnabled)} style={{ background: 'none', border: 'none', color: audioEnabled ? '#60a5fa' : '#64748b', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '1px solid #1a1a2e', paddingLeft: '1.5rem' }}>
+            <button className="round-control" type="button" aria-label="Toggle audio" onClick={() => setAudioEnabled(!audioEnabled)} style={{ background: 'none', border: 'none', color: audioEnabled ? '#fbbf24' : '#64748b', cursor: 'pointer' }}>
               {audioEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button>
 
@@ -373,7 +417,7 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
             </button>
             
             <button 
-              style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#1e3a8a', border: '2px solid #2563eb', color: '#bfdbfe', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#111118', border: '2px solid #8b5cf6', color: '#e2e8f0', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               type="button" 
               onClick={() => setShowProfile(true)} 
               aria-label="View Profile"
@@ -403,7 +447,7 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
         </aside>
 
         <main className="game-main">
-          <div className="mobile-breadcrumb"><span>REALMS OF ROUTINE</span><strong>/ {activeTabLabel}</strong></div>
+          <div className="mobile-breadcrumb"><span>AEGIS PROTOCOL</span><strong>/ {activeTabLabel}</strong></div>
           {gameState.error && <div className="inline-alert error" role="alert"><strong>The realm is unstable.</strong> {gameState.error}</div>}
           {gameState.loading && <div className="loading-state">Rebuilding the realm...</div>}
 
@@ -457,7 +501,7 @@ function RealmView({ profile, user, character, tasks, mandatoryTasks, boss, boss
   return <section className="view-section realm-view">
     <div className="realm-hero"><div><p className="kicker">TERRITORY CONTROL / ACTIVE CLUSTER</p><h1>{zoneName}</h1><p className="hero-copy">Your attribute focus dictates your dominion. Raise your metrics to heal the surrounding lands.</p><button className="primary-btn" type="button" onClick={() => onNavigate("quests")}>Enter the quest board <span>-&gt;</span></button></div><div className="realm-hero-character"><ChibiCharacter character={character} /><button className="customize-link" type="button" onClick={onCustomize}>Customize hero</button><HealthHearts value={stats.health} /></div></div>
     
-    <div className="world-map dynamic-overworld" aria-label="Dynamic shattered realm map" style={{ border: '1px solid var(--system-border)', padding: '2rem', borderRadius: '12px', background: 'rgba(11, 15, 25, 0.8)' }}>
+    <div className="world-map dynamic-overworld" aria-label="Dynamic shattered realm map" style={{ border: '1px solid #1a1a2e', padding: '2rem', borderRadius: '12px', background: 'rgba(5, 5, 10, 0.85)' }}>
       <div className="faction-header">
         <div>
           <span className="kicker">FACTION SECTOR</span>
@@ -823,7 +867,104 @@ function App() {
     return <ArcaneOnboarding onComplete={handleArcaneComplete} />;
   }
 
-  return <div className="landing-shell" style={{ backgroundImage: `url(${darkMode ? darkBg : lightBg})` }}><div className="landing-wash" /><header className="landing-header"><button className="brand-lockup" type="button"><span className="brand-glyph">+</span><span><strong>REALMS</strong><small>OF ROUTINE</small></span></button><button className="round-control" type="button" onClick={() => setDarkMode(!darkMode)}>{darkMode ? "DAY" : "NIGHT"}</button></header><main className="landing-content"><section className="landing-copy"><p className="kicker">A LIFE RPG FOR THE REAL WORLD</p><h1>Restore the realm.<br /><em>Restore yourself.</em></h1><p>Turn the habits you keep postponing into a playable path of mastery. Every quest builds the character you are becoming.</p><div className="landing-ritual"><span className="ritual-line" /><div><strong>SEQUENCE 01 / THE AWAKENING</strong><small>Three attributes. Infinite progress.</small></div></div></section><section className="auth-panel" ref={authSectionRef}><div className="auth-panel-head"><p className="kicker">ENTER THE REALM</p><div className="mode-switch"><button className={authMode === "login" ? "active" : ""} type="button" onClick={() => switchAuthMode("login")}>Login</button><button className={authMode === "register" ? "active" : ""} type="button" onClick={() => switchAuthMode("register")}>New character</button></div></div><h2>{authMode === "login" ? "Welcome back, novice." : "Choose your first name."}</h2><p className="auth-subtitle">{authMode === "login" ? "Your next sequence is waiting." : "The broken realm needs a new kind of hero."}</p><form onSubmit={handleSubmit}>{authMode === "register" && <><input name="display_name" type="text" placeholder="Character name" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} minLength={2} required /><input name="interests" type="text" placeholder="Interests for bonus quests" value={form.interests} onChange={(event) => setForm({ ...form, interests: event.target.value })} maxLength={500} /><div className="registration-character"><ChibiCharacter character={registrationCharacter} /><div><span>YOUR CHIBI</span><strong>{registrationCharacter.gender} / {registrationCharacter.hair}</strong></div><button type="button" className="text-link" onClick={() => setShowRegistrationForge(true)}>Design character -&gt;</button></div></>}<input name="email" type="email" placeholder="Email address" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /><input name="password" type="password" placeholder={authMode === "register" ? "Create a password (8+ characters)" : "Password"} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={authMode === "register" ? 8 : 1} required />{authState.error && <p className="form-error" role="alert">{authState.error}</p>}<button className="primary-btn wide" type="submit" disabled={authState.loading}>{authState.loading ? "Opening the gate..." : authMode === "login" ? "Enter the realm" : "Begin the journey"}<span>-&gt;</span></button></form><div className="auth-footer"><span>SECURE SESSION</span><small>Progress is saved to your realm.</small></div></section></main>{showRegistrationForge && <CharacterForge character={registrationCharacter} title="Design your first hero." saving={false} onSave={(next) => { setRegistrationCharacter(next); setShowRegistrationForge(false); }} onClose={() => setShowRegistrationForge(false)} />}</div>;
+  return (
+    <div className="landing-shell">
+      <div className="landing-wash" />
+      
+      {/* HEADER: Single clean logo & brand */}
+      <header className="landing-header" style={{ position: 'relative', zIndex: 20, padding: '1.5rem 2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(26, 26, 46, 0.6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '42px', height: '42px' }}>
+            <AegisLogo className="w-full h-full" />
+          </div>
+          <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+            <strong style={{ color: '#fff', letterSpacing: '0.25em', fontSize: '1rem', fontWeight: 800 }}>AEGIS</strong>
+            <small style={{ color: '#fbbf24', fontSize: '0.6rem', letterSpacing: '0.35em', fontWeight: 600 }}>PROTOCOL</small>
+          </span>
+        </div>
+        <div style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' }}>
+          SYS.v2.6 // SECURE GATEWAY
+        </div>
+      </header>
+
+      {/* CONTENT: Balanced 2-column grid */}
+      <main className="landing-content" style={{ alignItems: 'center' }}>
+        <section className="landing-copy">
+          <div style={{ display: 'inline-block', padding: '0.35rem 0.85rem', background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '4px', marginBottom: '1.5rem' }}>
+            <span style={{ color: '#fbbf24', fontFamily: 'monospace', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase' }}>✦ REAL-WORLD LIFE RPG & STRATEGY ENGINE</span>
+          </div>
+          
+          <h1 className="landing-title-glow">
+            Maintain the shield.<br />
+            <em>Defend your timeline.</em>
+          </h1>
+          
+          <p style={{ color: '#94a3b8', fontSize: '1.15rem', lineHeight: '1.7', marginBottom: '2.5rem', maxWidth: '520px' }}>
+            Turn the habits you keep postponing into a playable path of mastery. 
+            Level up your attributes, conquer the Daily Trinity, and prevent time attrition from fracturing your realm.
+          </p>
+
+          <div className="landing-ritual" style={{ borderLeft: '2px solid #fbbf24', paddingLeft: '1.5rem', display: 'flex', gap: '2rem' }}>
+            <div>
+              <strong style={{ color: '#cbd5e1', fontSize: '0.7rem', letterSpacing: '0.15em' }}>SYSTEM CORE</strong>
+              <small style={{ color: '#64748b', fontSize: '0.8rem' }}>Active Protection</small>
+            </div>
+            <div>
+              <strong style={{ color: '#cbd5e1', fontSize: '0.7rem', letterSpacing: '0.15em' }}>STATUS</strong>
+              <small style={{ color: '#34d399', fontSize: '0.8rem', fontWeight: 'bold' }}>Online 🟢</small>
+            </div>
+          </div>
+        </section>
+
+        <section className="auth-panel" ref={authSectionRef} style={{ background: 'rgba(8, 8, 16, 0.9)', border: '1px solid #2a2a48', borderRadius: '14px', padding: '2.5rem', backdropFilter: 'blur(16px)', boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.9), 0 0 30px rgba(147, 51, 234, 0.1)' }}>
+          <div className="auth-panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <p className="kicker" style={{ margin: 0, color: '#94a3b8' }}>ACCESS TERMINAL</p>
+            <div className="mode-switch" style={{ display: 'flex', background: '#000', borderRadius: '6px', overflow: 'hidden', border: '1px solid #2a2a48' }}>
+              <button className={authMode === "login" ? "active" : ""} type="button" onClick={() => switchAuthMode("login")} style={{ padding: '0.5rem 1.25rem', background: authMode === 'login' ? '#1a1a2e' : 'transparent', color: authMode === 'login' ? '#fff' : '#64748b', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>Login</button>
+              <button className={authMode === "register" ? "active" : ""} type="button" onClick={() => switchAuthMode("register")} style={{ padding: '0.5rem 1.25rem', background: authMode === 'register' ? '#1a1a2e' : 'transparent', color: authMode === 'register' ? '#fff' : '#64748b', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>Initialize</button>
+            </div>
+          </div>
+          
+          <h2 style={{ fontSize: '1.65rem', marginBottom: '0.5rem', color: '#f8fafc', fontWeight: 700 }}>{authMode === "login" ? "Welcome back, Operator." : "Forge a new identity."}</h2>
+          <p className="auth-subtitle" style={{ color: '#64748b', marginBottom: '2rem', fontSize: '0.875rem' }}>{authMode === "login" ? "Your next sequence is waiting." : "The fractured timeline needs a new hunter."}</p>
+          
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+            {authMode === "register" && (
+              <>
+                <input name="display_name" type="text" placeholder="Callsign (Character Name)" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} minLength={2} required style={{ width: '100%', padding: '0.85rem 1rem', background: '#030307', border: '1px solid #2a2a48', borderRadius: '8px', color: 'white', fontSize: '0.9rem' }} />
+                <input name="interests" type="text" placeholder="Known Affinities (Interests for Oracle AI)" value={form.interests} onChange={(event) => setForm({ ...form, interests: event.target.value })} maxLength={500} style={{ width: '100%', padding: '0.85rem 1rem', background: '#030307', border: '1px solid #2a2a48', borderRadius: '8px', color: 'white', fontSize: '0.9rem' }} />
+                <div className="registration-character" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#030307', borderRadius: '8px', border: '1px solid #2a2a48' }}>
+                  <ChibiCharacter character={registrationCharacter} />
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase' }}>AVATAR SHELL</span>
+                    <strong style={{ display: 'block', fontSize: '0.9rem', color: '#f1f5f9' }}>{registrationCharacter.gender} / {registrationCharacter.hair}</strong>
+                  </div>
+                  <button type="button" className="text-link" onClick={() => setShowRegistrationForge(true)} style={{ marginLeft: 'auto', color: '#c084fc', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Configure -&gt;</button>
+                </div>
+              </>
+            )}
+            
+            <input name="email" type="email" placeholder="Secure Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required style={{ width: '100%', padding: '0.85rem 1rem', background: '#030307', border: '1px solid #2a2a48', borderRadius: '8px', color: 'white', fontSize: '0.9rem' }} />
+            <input name="password" type="password" placeholder={authMode === "register" ? "Create encryption key (8+ chars)" : "Encryption Key"} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={authMode === "register" ? 8 : 1} required style={{ width: '100%', padding: '0.85rem 1rem', background: '#030307', border: '1px solid #2a2a48', borderRadius: '8px', color: 'white', fontSize: '0.9rem' }} />
+            
+            {authState.error && <p className="form-error" role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>{authState.error}</p>}
+            
+            <button className="primary-btn wide" type="submit" disabled={authState.loading} style={{ width: '100%', padding: '1rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #9333ea 100%)', border: 'none', color: 'white', fontWeight: '700', borderRadius: '8px', fontSize: '0.95rem', letterSpacing: '0.05em', cursor: 'pointer', boxShadow: '0 4px 20px rgba(234, 88, 12, 0.3)' }}>
+              {authState.loading ? "Bypassing mainframe..." : authMode === "login" ? "Enter the Aegis" : "Initiate Protocol"}
+              <span>-&gt;</span>
+            </button>
+          </form>
+          
+          <div className="auth-footer" style={{ marginTop: '2rem', paddingTop: '1.25rem', borderTop: '1px solid #2a2a48', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b' }}>
+            <span>END-TO-END ENCRYPTED</span>
+            <small>Data synchronized to the Realm.</small>
+          </div>
+        </section>
+      </main>
+
+      {showRegistrationForge && <CharacterForge character={registrationCharacter} title="Configure Avatar Shell" saving={false} onSave={(next) => { setRegistrationCharacter(next); setShowRegistrationForge(false); }} onClose={() => setShowRegistrationForge(false)} />}
+    </div>
+  );
 }
 
 export default App;
