@@ -16,3 +16,33 @@
 # 6. Disqualification Rules (Zero-Tolerance) Submissions will receive an immediate zero if they violate any of the following: Rule Description Broken Links The GitHub repo is private, or the live deployment link is broken/inaccessible at the time of jud Fake Data Persistence The application relies solely on localStorage for primary data. If user data does not persis Build/Deployment Failure The live app crashes on load, or the backend API fails to connect to the database in the produc Console/Runtime Crashes Unhandled runtime exceptions or blank-screen crashes occur during basic application usage. Invalid Repository The repo contains fewer than 3 chronological commits, lacks the backend code, or shows evid Missing/Restricted Video The walkthrough video is omitted, requires login authorization to view, or exceeds the 100MB 
 
 # 7. Judging Criteria Your submission will be evaluated based on the following pillars: Design & UX (Crucial Warning): The visual appeal and user experience are major factors. Submissions with lazy, overly generic designs, default unstyled components, or poor visual hierarchy will fetch significantly lower marks. We are looking for polish, creativity, and a cohesive theme. Performance & SEO: Fast load times, optimized assets, responsive performance across devices, semantic HTML, accessible structure, and SEO-friendly metadata/content to ensure a smooth user experience and strong search visibility. Creativity & Gamification: How creatively have you implemented the RPG elements? Does the progression system feel rewarding and well-thought-out, or does it feel like an afterthought? Robustness & Edge Cases: Does the app handle errors gracefully? What happens if a user submits an empty task, or their internet connection drops? Accessibility & Responsiveness: Does the application work flawlessly on mobile devices? Can it be navigated via keyboard?
+
+## Local development
+
+Start PostgreSQL from the repository root:
+
+```powershell
+docker compose up -d postgres
+```
+
+Then start the API and frontend in separate terminals:
+
+```powershell
+cd backend
+Copy-Item .env.example .env
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend uses `VITE_API_URL` from `frontend/.env` and defaults to `http://127.0.0.1:8000/api`. The backend provides JWT authentication, PostgreSQL-backed users, server-assigned quest rewards, activity logs, and ownership-scoped task CRUD.
+
+Phase 2 adds a strict non-linear XP curve, category-to-attribute rules, consecutive daily streaks, server-side coin rewards, a persistent inventory, and protected shop purchases.
+
+The timed recording plan and deployment verification checklist are in [docs/walkthrough.md](docs/walkthrough.md).
