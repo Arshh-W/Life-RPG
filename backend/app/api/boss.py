@@ -29,7 +29,7 @@ async def expire_challenge(challenge: BossChallenge, user: User, db: AsyncSessio
 async def active_boss(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> BossChallenge | None:
     challenge = await db.scalar(select(BossChallenge).where(BossChallenge.user_id == current_user.id, BossChallenge.status == "active").order_by(BossChallenge.expires_at))
     if challenge is None:
-        challenge = BossChallenge(user_id=current_user.id, title="The Procrastination Demon", description="Complete one meaningful task before the clock closes.", hp_total=100, hp_remaining=100, xp_reward=180, coin_reward=25, hp_penalty=15, expires_at=datetime.now(timezone.utc) + timedelta(hours=24))
+        challenge = BossChallenge(user_id=current_user.id, title="The Procrastination Demon", description="Complete one meaningful task before the clock closes.", hp_total=100, hp_remaining=100, xp_reward=180, coin_reward=25, hp_penalty=15, expires_at=datetime.now(timezone.utc) + timedelta(minutes=5))
         db.add(challenge)
         await db.commit()
         await db.refresh(challenge)

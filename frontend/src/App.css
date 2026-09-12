@@ -64,9 +64,14 @@ button { cursor: pointer; }
 .player-card { display: flex; align-items: center; gap: 12px; padding-bottom: 30px; border-bottom: 1px solid rgba(230, 220, 190, .12); }
 .player-orb { width: 47px; height: 47px; display: grid; place-items: center; border: 1px solid #d9a94b; color: #d9a94b; transform: rotate(45deg); }
 .player-orb span { transform: rotate(-45deg); font-family: 'DM Mono', monospace; }
+.player-card > div:nth-child(2) { min-width: 0; flex: 1; }
 .player-card h2 { margin: 5px 0; font-size: 1rem; }
 .player-card p { margin: 0; color: #82918d; font-size: .73rem; }
 .player-card small { color: #d9a94b; font-size: .55rem; }
+.sidebar-character { display: grid; justify-items: center; align-self: end; width: 50px; flex: 0 0 50px; }
+.sidebar-character .chibi { transform: scale(.58); transform-origin: center top; margin-bottom: -39px; }
+.health-hearts { display: flex; gap: 2px; color: rgba(229,138,121,.3); font-size: .58rem; line-height: 1; }
+.health-hearts .filled { color: #e58a79; text-shadow: 0 0 6px rgba(229,138,121,.55); }
 .game-nav { display: grid; gap: 5px; margin-top: 28px; }
 .game-nav button { display: flex; align-items: center; gap: 12px; padding: 13px 10px; border: 0; color: #8e9993; background: transparent; text-align: left; font-size: .66rem; }
 .game-nav button .ui-icon { color: #697974; }
@@ -94,7 +99,7 @@ button { cursor: pointer; }
 .realm-hero { display: flex; justify-content: space-between; align-items: center; min-height: 285px; padding-bottom: 44px; border-bottom: 1px solid rgba(230,220,190,.12); }
 .realm-hero h1 { margin: 0; font-size: clamp(2.7rem, 5vw, 5.2rem); line-height: .98; letter-spacing: -.07em; }
 .hero-copy { max-width: 490px; margin: 22px 0 25px; color: #9fa9a3; line-height: 1.6; }
-.realm-hero-character { display: grid; justify-items: center; gap: 12px; margin-right: 7%; }.customize-link { border: 0; color: #d9a94b; background: transparent; font-size: .68rem; }.customize-link:hover { text-decoration: underline; }
+.realm-hero-character { display: grid; justify-items: center; gap: 12px; margin-right: 7%; }.realm-hero-character .chibi { transform: scale(1.18); transform-origin: center bottom; margin-bottom: 7px; }.realm-hero-character .health-hearts { margin-top: -4px; font-size: .76rem; gap: 3px; }.customize-link { border: 0; color: #d9a94b; background: transparent; font-size: .68rem; }.customize-link:hover { text-decoration: underline; }
 .chibi { position: relative; width: 72px; height: 94px; }.chibi.large { transform: scale(1.65); margin: 28px 0 38px; }.chibi-head { position: absolute; z-index: 2; top: 10px; left: 15px; width: 42px; height: 42px; border: 2px solid #282d35; border-radius: 45% 45% 42% 42%; background: #f3ba8c; }.chibi-body { position: absolute; z-index: 1; top: 48px; left: 20px; width: 34px; height: 39px; border: 2px solid #282d35; border-radius: 12px 12px 8px 8px; background: #5c73b1; }.chibi-rogue .chibi-body { background: #a55e59; }.chibi-arm { position: absolute; top: 11px; width: 8px; height: 24px; border: 2px solid #282d35; border-radius: 7px; background: #f3ba8c; }.chibi-arm.left { left: -9px; transform: rotate(20deg); }.chibi-arm.right { right: -9px; transform: rotate(-20deg); }.chibi-hair { position: absolute; top: -8px; left: 1px; width: 38px; height: 21px; border: 3px solid #282d35; border-bottom: 0; border-radius: 50% 50% 10% 10%; background: #4d302a; }.hair-long .chibi-hair { height: 33px; border-radius: 50% 50% 30% 30%; }.hair-spiky .chibi-hair { clip-path: polygon(0 100%, 8% 20%, 25% 55%, 43% 0, 61% 50%, 80% 15%, 100% 100%); border: 0; border-radius: 0; }.hair-crown .chibi-hair { border-color: #d9a94b; background: #d9a94b; }.chibi-eye { position: absolute; top: 18px; width: 4px; height: 5px; border-radius: 50%; background: #282d35; }.chibi-eye.left { left: 10px; }.chibi-eye.right { right: 10px; }.chibi-mouth { position: absolute; left: 15px; top: 28px; width: 12px; height: 6px; border-bottom: 2px solid #8e4d4b; border-radius: 0 0 50% 50%; }.mouth-grin .chibi-mouth { width: 15px; height: 9px; background: #fff4df; border: 2px solid #8e4d4b; }.mouth-calm .chibi-mouth { width: 10px; border-radius: 0; }.mouth-brave .chibi-mouth { height: 8px; border-top: 2px solid #8e4d4b; border-bottom: 0; }.chibi-shadow { position: absolute; bottom: 0; left: 10px; width: 53px; height: 9px; border-radius: 50%; background: rgba(0,0,0,.35); }
 .realm-sigil { position: relative; display: grid; place-items: center; width: 210px; height: 210px; margin-right: 6%; color: #d9a94b; }
 .realm-sigil > span { font-size: 4rem; font-weight: 300; }

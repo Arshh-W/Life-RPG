@@ -11,7 +11,7 @@ from app.core.security import create_access_token, create_refresh_token, hash_pa
 from app.database import get_db
 from app.models.session import UserSession
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserRead
+from app.schemas.auth import CharacterUpdate, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserRead
 
 router = APIRouter()
 
@@ -34,7 +34,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
     existing_user = await db.scalar(select(User).where(User.email == payload.email.lower()))
     if existing_user is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
-    user = User(email=payload.email.lower(), display_name=payload.display_name.strip(), interests=payload.interests.strip(), password_hash=hash_password(payload.password))
+    user = User(email=payload.email.lower(), display_name=payload.display_name.strip(), interests=payload.interests.strip(), character_gender=payload.character_gender, character_hair=payload.character_hair, character_mouth=payload.character_mouth, character_hair_color=payload.character_hair_color, character_skin_color=payload.character_skin_color, character_outfit_color=payload.character_outfit_color, password_hash=hash_password(payload.password))
     db.add(user)
     try:
         await db.commit()
@@ -75,4 +75,17 @@ async def logout(payload: RefreshRequest, current_user: User = Depends(get_curre
 
 @router.get("/me", response_model=UserRead)
 async def me(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
+
+
+@router.patch("/me", response_model=UserRead)
+async def update_character(payload: CharacterUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    current_user.character_gender = payload.character_gender
+    current_user.character_hair = payload.character_hair
+    current_user.character_mouth = payload.character_mouth
+    current_user.character_hair_color = payload.character_hair_color
+    current_user.character_skin_color = payload.character_skin_color
+    current_user.character_outfit_color = payload.character_outfit_color
+    await db.commit()
+    await db.refresh(current_user)
     return current_user

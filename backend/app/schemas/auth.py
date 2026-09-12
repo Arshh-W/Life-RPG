@@ -7,6 +7,12 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     display_name: str = Field(min_length=2, max_length=80)
     interests: str = Field(default="", max_length=500)
+    character_gender: str = Field(default="male", max_length=16)
+    character_hair: str = Field(default="short", max_length=24)
+    character_mouth: str = Field(default="smile", max_length=24)
+    character_hair_color: str = Field(default="brown", max_length=24)
+    character_skin_color: str = Field(default="warm", max_length=24)
+    character_outfit_color: str = Field(default="blue", max_length=24)
     password: str = Field(min_length=8, max_length=128)
 
     @field_validator("display_name")
@@ -30,6 +36,12 @@ class UserRead(BaseModel):
     email: EmailStr
     display_name: str
     interests: str
+    character_gender: str
+    character_hair: str
+    character_mouth: str
+    character_hair_color: str
+    character_skin_color: str
+    character_outfit_color: str
     xp: int
     level: int
     discipline: int
@@ -50,3 +62,12 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=20, max_length=200)
+
+
+class CharacterUpdate(BaseModel):
+    character_gender: str = Field(min_length=1, max_length=16)
+    character_hair: str = Field(min_length=1, max_length=24)
+    character_mouth: str = Field(min_length=1, max_length=24)
+    character_hair_color: str = Field(min_length=1, max_length=24)
+    character_skin_color: str = Field(min_length=1, max_length=24)
+    character_outfit_color: str = Field(min_length=1, max_length=24)

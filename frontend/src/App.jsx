@@ -251,6 +251,7 @@ function GamePage({ user, darkMode, setDarkMode, onLogout }) {
           <div className="player-card">
             <div className="player-orb"><span>{profile?.level ?? user.level}</span></div>
             <div><small>THE NOVICE</small><h2>{user.display_name}</h2><p>Level {profile?.level ?? user.level} explorer</p></div>
+            <div className="sidebar-character"><ChibiCharacter character={character} /><HealthHearts value={profile?.attributes?.health ?? user.health} /></div>
           </div>
           <nav className="game-nav" aria-label="Game sections">
             <button className={activeView === "realm" ? "active" : ""} type="button" onClick={() => setActiveView("realm")}><Icon>+</Icon>The Realm</button>
@@ -299,12 +300,11 @@ function RealmView({ profile, user, character, tasks, mandatoryTasks, boss, boss
     { key: "intelligence", label: "Intelligence", short: "INT", value: stats.intelligence, color: "gold", note: "Clarity & craft" },
     { key: "discipline", label: "Discipline", short: "DIS", value: stats.discipline, color: "violet", note: "Streak power" },
     { key: "strength", label: "Physicality", short: "PHY", value: stats.strength, color: "coral", note: "Energy & HP" },
-    { key: "health", label: "Health", short: "HP", value: stats.health, color: stats.health < 30 ? "red" : stats.health < 60 ? "yellow" : "green", note: "Realm vitality" },
     { key: "emotional_intelligence", label: "Social & emotional", short: "EQ", value: stats.emotional_intelligence, color: "blue", note: "Human connection" },
   ];
 
   return <section className="view-section realm-view">
-    <div className="realm-hero"><div><p className="kicker">THE SHATTERED REALM / CHAPTER 01</p><h1>Make the ordinary<br /><em>extraordinary.</em></h1><p className="hero-copy">Your focus is the magic. Your habits are the path. Restore your world one deliberate action at a time.</p><button className="primary-btn" type="button" onClick={() => onNavigate("quests")}>Enter the quest board <span>-&gt;</span></button></div><div className="realm-hero-character"><ChibiCharacter character={character} /><button className="customize-link" type="button" onClick={onCustomize}>Customize hero</button></div></div>
+    <div className="realm-hero"><div><p className="kicker">THE SHATTERED REALM / CHAPTER 01</p><h1>Make the ordinary<br /><em>extraordinary.</em></h1><p className="hero-copy">Your focus is the magic. Your habits are the path. Restore your world one deliberate action at a time.</p><button className="primary-btn" type="button" onClick={() => onNavigate("quests")}>Enter the quest board <span>-&gt;</span></button></div><div className="realm-hero-character"><ChibiCharacter character={character} /><button className="customize-link" type="button" onClick={onCustomize}>Customize hero</button><HealthHearts value={stats.health} /></div></div>
     <div className="world-map" aria-label="The shattered realm map">
       <div className="map-stars">+ &nbsp; . &nbsp; * &nbsp; . &nbsp; + &nbsp; . &nbsp; * &nbsp; . &nbsp; +</div>
       <div className="map-path path-one" /><div className="map-path path-two" />
@@ -344,6 +344,11 @@ function QuestForm({ value, loading, onChange, onSubmit, onClose }) {
 
 function ChibiCharacter({ character, large = false }) {
   return <div className={`chibi ${large ? "large" : ""} ${character.gender} hair-${character.hair} mouth-${character.mouth} hair-color-${character.hairColor} skin-${character.skinColor} outfit-${character.outfitColor}`} aria-label="Custom chibi character"><div className="chibi-shadow" /><div className="chibi-body"><span className="chibi-arm left" /><span className="chibi-arm right" /></div><div className="chibi-head"><span className="chibi-hair" /><span className="chibi-eye left" /><span className="chibi-eye right" /><span className="chibi-mouth" /></div></div>;
+}
+
+function HealthHearts({ value }) {
+  const filledHearts = Math.round(Math.max(0, Math.min(100, value)) / 20);
+  return <div className="health-hearts" aria-label={`${value} health`} role="img">{Array.from({ length: 5 }, (_, index) => <span className={index < filledHearts ? "filled" : ""} key={index}>♥</span>)}</div>;
 }
 
 function VerificationModal({ task, loading, uploadRef, capturedProof, onCapture, onSubmit, onClose }) {
