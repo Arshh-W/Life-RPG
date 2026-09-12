@@ -1,7 +1,7 @@
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
-    container_name: life-rpg-postgres
+    container_name: life-rpg-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: liferpg

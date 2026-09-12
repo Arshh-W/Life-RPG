@@ -22,7 +22,7 @@
 Start PostgreSQL from the repository root:
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d db
 ```
 
 Then start the API and frontend in separate terminals:
@@ -43,6 +43,6 @@ npm run dev
 
 The frontend uses `VITE_API_URL` from `frontend/.env` and defaults to `http://127.0.0.1:8000/api`. The backend provides JWT authentication, PostgreSQL-backed users, server-assigned quest rewards, activity logs, and ownership-scoped task CRUD.
 
-Phase 2 adds a strict non-linear XP curve, category-to-attribute rules, consecutive daily streaks, server-side coin rewards, a persistent inventory, and protected shop purchases.
+Phase 2 adds a strict non-linear XP curve, category-to-attribute rules, consecutive daily streaks, server-side coin rewards, a persistent inventory, and protected shop purchases. Phase 3 adds boss deadlines with server-side HP penalties, camera-gated physical quests, refresh-token rotation, and territory map scaffolding.
 
 The timed recording plan and deployment verification checklist are in [docs/walkthrough.md](docs/walkthrough.md).
