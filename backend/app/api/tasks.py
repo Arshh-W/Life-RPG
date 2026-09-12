@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from hashlib import sha256
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +32,8 @@ async def list_tasks(current_user: User = Depends(get_current_user), db: AsyncSe
 @router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 async def create_task(payload: TaskCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> Task:
     rule = CATEGORY_RULES[payload.category.value]
-    task = Task(user_id=current_user.id, title=payload.title.strip(), description=payload.description, category=payload.category, xp_reward=rule.xp_reward, is_mandatory=payload.is_mandatory)
+    verification_required = payload.category == TaskCategory.physicality and payload.is_mandatory
+    task = Task(user_id=current_user.id, title=payload.title.strip(), description=payload.description, category=payload.category, xp_reward=rule.xp_reward, is_mandatory=payload.is_mandatory, verification_required=verification_required, verification_status="pending" if verification_required else "not_required")
     db.add(task)
     await db.commit()
     await db.refresh(task)
@@ -45,6 +48,8 @@ async def update_task(task_id: UUID, payload: TaskUpdate, current_user: User = D
         updates["title"] = updates["title"].strip()
     if "category" in updates:
         updates["xp_reward"] = CATEGORY_RULES[updates["category"].value].xp_reward
+        updates["verification_required"] = updates["category"] == TaskCategory.physicality and task.is_mandatory
+        updates["verification_status"] = "pending" if updates["verification_required"] else "not_required"
     for field, value in updates.items():
         setattr(task, field, value)
     await db.commit()
@@ -57,6 +62,8 @@ async def complete_task(task_id: UUID, current_user: User = Depends(get_current_
     task = await owned_task(task_id, current_user, db)
     if task.is_completed:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Quest is already complete")
+    if task.verification_required and task.verification_status != "verified":
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="Photo verification is required before this quest can award rewards")
     task.is_completed = True
     task.completed_at = datetime.now(timezone.utc)
     category_key = task.category.value if isinstance(task.category, TaskCategory) else task.category
@@ -73,6 +80,24 @@ async def complete_task(task_id: UUID, current_user: User = Depends(get_current_
         current_user.last_activity_date = today
     task.xp_reward = rule.xp_reward
     db.add(ActivityLog(user_id=current_user.id, task_id=task.id, event_type="quest_completed", xp_delta=rule.xp_reward))
+    await db.commit()
+    await db.refresh(task)
+    return task
+
+
+@router.post("/{task_id}/verify", response_model=TaskRead)
+async def verify_task(task_id: UUID, image: UploadFile = File(...), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> Task:
+    task = await owned_task(task_id, current_user, db)
+    if not task.verification_required:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This quest does not require verification")
+    if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Verification must be a JPEG, PNG, or WebP image")
+    contents = await image.read(5_000_001)
+    if len(contents) > 5_000_000:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Verification image must be 5 MB or smaller")
+    task.verification_hash = sha256(contents).hexdigest()
+    task.verification_status = "verified"
+    task.verification_submitted_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(task)
     return task

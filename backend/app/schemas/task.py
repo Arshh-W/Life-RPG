@@ -47,6 +47,8 @@ class TaskRead(BaseModel):
     category: TaskCategory
     xp_reward: int
     is_mandatory: bool
+    verification_required: bool
+    verification_status: str
     is_completed: bool
     completed_at: datetime | None
     created_at: datetime

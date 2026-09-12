@@ -7,19 +7,16 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.auth import router as auth_router
+from app.api.boss import router as boss_router
 from app.api.economy import router as economy_router
 from app.api.progression import router as progression_router
 from app.api.tasks import router as tasks_router
 from app.core.config import settings
-from app.database import Base, engine, upgrade_legacy_schema
-from app.models import InventoryItem, ShopItem
+from app.database import engine
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    await upgrade_legacy_schema()
     yield
     await engine.dispose()
 
@@ -55,6 +52,7 @@ async def database_exception_handler(_: Request, __: SQLAlchemyError) -> JSONRes
 
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(boss_router, prefix="/api/boss-challenges", tags=["boss-challenges"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(progression_router, prefix="/api/progression", tags=["progression"])
 app.include_router(economy_router, prefix="/api/economy", tags=["economy"])
