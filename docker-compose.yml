@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: life-rpg-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: liferpg
+      POSTGRES_USER: liferpg
+      POSTGRES_PASSWORD: liferpg
+    ports:
+      - "5432:5432"
+    volumes:
+      - liferpg-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  liferpg-postgres-data:
