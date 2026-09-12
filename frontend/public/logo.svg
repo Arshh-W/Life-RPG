@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <!-- Epic RPG Gold/Amber Gradient -->
+    <linearGradient id="legendaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+    <!-- Ethereal Magic Gradient -->
+    <linearGradient id="etherealGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+    <filter id="rpgGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="coreGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Outer Runic Hexagon (The Aegis Shield) -->
+  <polygon points="50,5 89,27 89,73 50,95 11,73 11,27" fill="none" stroke="url(#legendaryGrad)" stroke-width="2.5" filter="url(#rpgGlow)" opacity="0.9"/>
+  
+  <!-- Inner Binding Circle -->
+  <circle cx="50" cy="50" r="32" fill="none" stroke="url(#etherealGrad)" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.8" />
+
+  <!-- Magic Burst Behind Gem -->
+  <path d="M50 0 L52 40 L90 50 L52 60 L50 100 L48 60 L10 50 L48 40 Z" fill="url(#legendaryGrad)" opacity="0.25" filter="url(#rpgGlow)"/>
+
+  <!-- The Core Soul Gem -->
+  <polygon points="50,20 65,50 50,80 35,50" fill="url(#etherealGrad)" filter="url(#coreGlow)" />
+  
+  <!-- Gem 3D Highlights -->
+  <polygon points="50,20 65,50 50,50" fill="#ffffff" opacity="0.4" />
+  <polygon points="50,20 50,50 35,50" fill="#e0e7ff" opacity="0.15" />
+</svg>
