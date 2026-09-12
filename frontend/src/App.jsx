@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiRequest } from './api'
 import './App.css'
 
@@ -14,7 +14,9 @@ function AuthScreen({ onAuthenticated }) {
     event.preventDefault(); setBusy(true); setError('')
     try {
       const result = await apiRequest(`/auth/${mode}`, { method: 'POST', body: JSON.stringify(form) })
-      localStorage.setItem('life-rpg-token', result.access_token); onAuthenticated(result)
+      localStorage.setItem('life-rpg-token', result.access_token)
+      localStorage.setItem('life-rpg-refresh-token', result.refresh_token)
+      onAuthenticated(result)
     } catch (requestError) { setError(requestError.message) } finally { setBusy(false) }
   }
 
@@ -27,12 +29,65 @@ function AttributeBar({ label, value, accent }) {
   return <div className="attribute-row"><div><span>{label}</span><strong>{value}</strong></div><span className={`attribute-track ${accent}`}><i style={{ width: `${Math.min(100, value * 2)}%` }} /></span></div>
 }
 
+function CameraModal({ task, token, onClose, onVerified }) {
+  const videoRef = useRef(null)
+  const [stream, setStream] = useState(null)
+  const [error, setError] = useState('')
+  const [capturing, setCapturing] = useState(false)
+  const cameraSupported = Boolean(navigator.mediaDevices?.getUserMedia)
+
+  useEffect(() => {
+    let activeStream
+    const cameraRequest = navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    if (!cameraRequest) return undefined
+    cameraRequest.then((nextStream) => {
+      activeStream = nextStream; setStream(nextStream)
+      if (videoRef.current) videoRef.current.srcObject = nextStream
+    }).catch(() => setError('Camera access is required for this high-tier quest.'))
+    return () => activeStream?.getTracks().forEach((track) => track.stop())
+  }, [])
+
+  async function capture() {
+    if (!videoRef.current || !stream) return
+    setCapturing(true); setError('')
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight
+    canvas.getContext('2d').drawImage(videoRef.current, 0, 0)
+    canvas.toBlob(async (blob) => {
+      try {
+        const formData = new FormData(); formData.append('image', blob, 'quest-verification.jpg')
+        const verified = await apiRequest(`/tasks/${task.id}/verify`, { method: 'POST', body: formData }, token)
+        onVerified(verified)
+      } catch (requestError) { setError(requestError.message); setCapturing(false) }
+    }, 'image/jpeg', .82)
+  }
+
+  return <div className="modal-backdrop" role="presentation"><section className="camera-modal" role="dialog" aria-modal="true" aria-labelledby="camera-title"><button className="modal-close" type="button" onClick={onClose} aria-label="Close camera">x</button><p className="eyebrow">Anti-cheat verification</p><h2 id="camera-title">Show the proof of action.</h2><p>Capture a quick image to unlock the server-verified reward for <strong>{task.title}</strong>.</p>{stream ? <video ref={videoRef} autoPlay playsInline muted /> : <div className="camera-placeholder">{error || (!cameraSupported ? 'This browser does not provide camera access.' : 'Requesting camera access...')}</div>}{error && <p className="form-error" role="alert">{error}</p>}<button className="primary-button" type="button" onClick={capture} disabled={!stream || capturing}>{capturing ? 'Verifying...' : 'Capture proof'}</button></section></div>
+}
+
+function BossCard({ boss, onComplete, onExpired }) {
+  const [seconds, setSeconds] = useState(1)
+  useEffect(() => { const timer = window.setInterval(() => setSeconds(Math.max(0, Math.floor((new Date(boss.expires_at) - Date.now()) / 1000))), 1000); return () => window.clearInterval(timer) }, [boss.expires_at])
+  useEffect(() => { if (seconds === 0) onExpired() }, [seconds, onExpired])
+  const hours = String(Math.floor(seconds / 3600)).padStart(2, '0')
+  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')
+  const remaining = String(seconds % 60).padStart(2, '0')
+  return <article className="boss-card"><div className="boss-heading"><div><p className="eyebrow">High-stakes event</p><h2>{boss.title}</h2></div><span className="boss-timer" aria-label={`${hours} hours ${minutes} minutes ${remaining} seconds remaining`}>{hours}:{minutes}:{remaining}</span></div><p>{boss.description}</p><div className="boss-hp"><span><b>DEMON HP</b><b>{boss.hp_remaining} / {boss.hp_total}</b></span><i style={{ width: `${(boss.hp_remaining / boss.hp_total) * 100}%` }} /></div><div className="boss-footer"><span>+{boss.xp_reward} XP / +{boss.coin_reward} coins / -{boss.hp_penalty} HP on failure</span><button className="boss-button" type="button" onClick={() => onComplete(boss)}>Complete challenge</button></div></article>
+}
+
+function TerritoryPanel({ attributes }) {
+  const territories = [{ name: 'Silicon Citadel', value: attributes.intelligence, color: 'lime', detail: 'INTELLIGENCE' }, { name: 'Ironroot Fields', value: attributes.strength, color: 'orange', detail: 'STRENGTH' }, { name: 'Weirwood Archives', value: attributes.emotional_intelligence, color: 'cyan', detail: 'EMOTIONAL INTELLIGENCE' }]
+  return <section className="territory-panel" aria-labelledby="territory-title"><div className="section-heading"><div><p className="eyebrow">The overworld</p><h2 id="territory-title">Map clusters</h2></div><span className="streak-badge">YOUR INFLUENCE</span></div><div className="territory-map"><div className="map-grid" />{territories.map((territory) => <article className={`territory-card ${territory.color}`} key={territory.name}><span>{territory.detail}</span><h3>{territory.name}</h3><p>Rank {Math.max(1, Math.floor(territory.value / 5))} influence</p></article>)}</div></section>
+}
+
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem('life-rpg-token'))
   const [user, setUser] = useState(null)
   const [progression, setProgression] = useState(null)
   const [tasks, setTasks] = useState([])
   const [shop, setShop] = useState([])
+  const [boss, setBoss] = useState(null)
+  const [verificationTask, setVerificationTask] = useState(null)
   const [loading, setLoading] = useState(Boolean(token))
   const [sessionError, setSessionError] = useState('')
   const [error, setError] = useState('')
@@ -44,80 +99,37 @@ function App() {
 
   useEffect(() => {
     if (!token) return
-    Promise.all([
-      apiRequest('/auth/me', {}, token),
-      apiRequest('/tasks', {}, token),
-      apiRequest('/progression/profile', {}, token),
-      apiRequest('/economy/shop', {}, token),
-    ]).then(([currentUser, currentTasks, currentProgression, currentShop]) => {
-      setUser(currentUser); setTasks(currentTasks); setProgression(currentProgression); setShop(currentShop)
-    }).catch((requestError) => { if (requestError.status === 401) { localStorage.removeItem('life-rpg-token'); setToken(null) } else { setSessionError(requestError.message) } }).finally(() => setLoading(false))
+    Promise.all([apiRequest('/auth/me', {}, token), apiRequest('/tasks', {}, token), apiRequest('/progression/profile', {}, token), apiRequest('/economy/shop', {}, token), apiRequest('/boss-challenges/active', {}, token)]).then(([currentUser, currentTasks, currentProgression, currentShop, currentBoss]) => { setUser(currentUser); setTasks(currentTasks); setProgression(currentProgression); setShop(currentShop); setBoss(currentBoss) }).catch((requestError) => { if (requestError.status === 401) { localStorage.clear(); setToken(null) } else setSessionError(requestError.message) }).finally(() => setLoading(false))
   }, [token])
 
   function authenticated(result) { setSessionError(''); setToken(result.access_token); setUser(result.user); setLoading(true) }
-  function logout() { localStorage.removeItem('life-rpg-token'); setToken(null); setUser(null); setTasks([]); setProgression(null) }
-
-  async function refreshProgression() {
-    const [currentUser, currentProgression] = await Promise.all([apiRequest('/auth/me', {}, token), apiRequest('/progression/profile', {}, token)])
-    setUser(currentUser); setProgression(currentProgression)
-    return currentProgression
-  }
+  function logout() { localStorage.removeItem('life-rpg-token'); localStorage.removeItem('life-rpg-refresh-token'); setToken(null); setUser(null); setTasks([]); setProgression(null) }
+  async function refreshProfile() { const [currentUser, currentProgression] = await Promise.all([apiRequest('/auth/me', {}, token), apiRequest('/progression/profile', {}, token)]); setUser(currentUser); setProgression(currentProgression); return currentProgression }
 
   async function saveTask(event) {
     event.preventDefault(); if (!form.title.trim()) return
     setSaving(true); setError('')
-    try {
-      if (editingId) {
-        const updated = await apiRequest(`/tasks/${editingId}`, { method: 'PATCH', body: JSON.stringify(form) }, token)
-        setTasks((current) => current.map((task) => task.id === editingId ? updated : task))
-      } else {
-        const created = await apiRequest('/tasks', { method: 'POST', body: JSON.stringify(form) }, token)
-        setTasks((current) => [created, ...current])
-      }
-      setForm(emptyForm); setEditingId(null)
-    } catch (requestError) { setError(requestError.message) } finally { setSaving(false) }
+    try { if (editingId) { const updated = await apiRequest(`/tasks/${editingId}`, { method: 'PATCH', body: JSON.stringify(form) }, token); setTasks((current) => current.map((task) => task.id === editingId ? updated : task)) } else { const created = await apiRequest('/tasks', { method: 'POST', body: JSON.stringify(form) }, token); setTasks((current) => [created, ...current]) }; setForm(emptyForm); setEditingId(null) } catch (requestError) { setError(requestError.message) } finally { setSaving(false) }
   }
 
   async function completeTask(task) {
+    if (task.verification_required && task.verification_status !== 'verified') { setVerificationTask(task); return }
     const previousTasks = tasks; const previousUser = user; const previousProgression = progression
-    if (task.is_completed) return
-    setTasks((current) => current.map((item) => item.id === task.id ? { ...item, is_completed: true } : item))
-    setUser((current) => ({ ...current, xp: current.xp + task.xp_reward, coins: current.coins + 10 }))
-    setNotice(`+${task.xp_reward} XP earned`)
-    window.setTimeout(() => setNotice(''), 2200)
-    try {
-      const completed = await apiRequest(`/tasks/${task.id}/complete`, { method: 'POST' }, token)
-      setTasks((current) => current.map((item) => item.id === task.id ? completed : item))
-      const updatedProgression = await refreshProgression()
-      if (updatedProgression.level > (previousProgression?.level || user.level)) {
-        setNotice(`Level ${updatedProgression.level} unlocked`)
-      }
-      const refreshedShop = await apiRequest('/economy/shop', {}, token)
-      setShop(refreshedShop)
-    } catch (requestError) { setTasks(previousTasks); setUser(previousUser); setProgression(previousProgression); setError(requestError.message) }
+    setTasks((current) => current.map((item) => item.id === task.id ? { ...item, is_completed: true } : item)); setNotice(`+${task.xp_reward} XP earned`); window.setTimeout(() => setNotice(''), 2200)
+    try { const completed = await apiRequest(`/tasks/${task.id}/complete`, { method: 'POST' }, token); setTasks((current) => current.map((item) => item.id === task.id ? completed : item)); const updatedProgression = await refreshProfile(); if (updatedProgression.level > (previousProgression?.level || user.level)) setNotice(`Level ${updatedProgression.level} unlocked`); setShop(await apiRequest('/economy/shop', {}, token)) } catch (requestError) { setTasks(previousTasks); setUser(previousUser); setProgression(previousProgression); setError(requestError.message) }
   }
 
-  async function deleteTask(taskId) {
-    const previousTasks = tasks; setTasks((current) => current.filter((task) => task.id !== taskId))
-    try { await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' }, token) } catch (requestError) { setTasks(previousTasks); setError(requestError.message) }
-  }
-
-  async function purchase(item) {
-    setPurchasingId(item.id); setError('')
-    try {
-      const result = await apiRequest(`/economy/items/${item.id}/purchase`, { method: 'POST' }, token)
-      setShop((current) => current.map((shopItem) => shopItem.id === item.id ? result.item : shopItem))
-      setUser((current) => ({ ...current, coins: result.coins_remaining }))
-      setNotice(`${item.name} added to inventory`); window.setTimeout(() => setNotice(''), 2200)
-    } catch (requestError) { setError(requestError.message) } finally { setPurchasingId(null) }
-  }
+  async function completeBoss(challenge) { try { await apiRequest(`/boss-challenges/${challenge.id}/complete`, { method: 'POST' }, token); await refreshProfile(); setBoss(null); setNotice('Boss challenge cleared'); window.setTimeout(() => setNotice(''), 2200) } catch (requestError) { setError(requestError.message) } }
+  async function deleteTask(taskId) { const previousTasks = tasks; setTasks((current) => current.filter((task) => task.id !== taskId)); try { await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' }, token) } catch (requestError) { setTasks(previousTasks); setError(requestError.message) } }
+  async function purchase(item) { setPurchasingId(item.id); try { const result = await apiRequest(`/economy/items/${item.id}/purchase`, { method: 'POST' }, token); setShop((current) => current.map((shopItem) => shopItem.id === item.id ? result.item : shopItem)); setUser((current) => ({ ...current, coins: result.coins_remaining })); setNotice(`${item.name} added to inventory`); window.setTimeout(() => setNotice(''), 2200) } catch (requestError) { setError(requestError.message) } finally { setPurchasingId(null) } }
 
   if (!token || (!user && !loading && !sessionError)) return <AuthScreen onAuthenticated={authenticated} />
   if (sessionError) return <main className="loading-screen"><div className="loading-mark">!</div><p role="alert">{sessionError}</p><button className="primary-button" type="button" onClick={() => window.location.reload()}>Reconnect to realm</button></main>
   if (loading || !user || !progression) return <main className="loading-screen"><div className="loading-mark">+</div><p>Opening your realm...</p></main>
+
   const completed = tasks.filter((task) => task.is_completed).length
   const attributes = progression.attributes
-  return <main className="app-shell"><header className="topbar"><a className="brand" href="#top"><span className="brand-mark">+</span><span>LIFE RPG</span></a><nav><a className="nav-link active" href="#quests">Quests</a><a className="nav-link" href="#character">Character</a><a className="nav-link" href="#inventory">Rewards</a></nav><div className="header-actions"><span className="coin-pill">◈ {user.coins}</span><button className="profile-button" type="button" onClick={logout}><span className="avatar">{user.display_name[0].toUpperCase()}</span><span className="profile-name">{user.display_name}</span><span className="chevron">Log out</span></button></div></header>{notice && <div className="reward-toast" role="status">✦ {notice}</div>}<section className="hero-panel" id="character"><div className="hero-copy"><p className="eyebrow">Your sequence is active</p><h1>Make today<br /><em>count.</em></h1><p className="hero-note">Small actions compound into a life you are proud of.</p></div><div className="hero-figure" aria-hidden="true"><span className="figure-sun" /><span className="figure-orbit" /><span className="figure-orbit orbit-two" /><span className="figure-star">+</span><div className="figure-core">LVL<br /><strong>{String(progression.level).padStart(2, '0')}</strong></div></div><div className="level-card"><div className="level-heading"><span>Current level</span><strong>{String(progression.level).padStart(2, '0')}</strong></div><div className="xp-bar" aria-label={`${progression.xp} XP toward ${progression.next_level_xp} XP`}><span style={{ width: `${progression.level_progress}%` }} /></div><div className="xp-label"><span>{progression.xp} XP</span><span>{progression.next_level_xp} XP</span></div><p>{Math.max(0, progression.next_level_xp - progression.xp)} XP until next level</p></div></section><section className="content-grid"><div className="quest-section" id="quests"><div className="section-heading"><div><p className="eyebrow">Your daily run</p><h2>Active quests</h2></div><span className="quest-count">{completed} / {tasks.length} cleared</span></div>{error && <p className="form-error" role="alert">{error}</p>}{loading ? <LoadingSkeleton /> : <div className="quest-list">{tasks.map((task, index) => <article className={`quest-card ${task.is_completed ? 'completed' : ''}`} key={task.id}><span className="quest-number">{String(index + 1).padStart(2, '0')}</span><div className="quest-info"><span className="quest-type">{task.category}</span><h3>{task.title}</h3><span className="quest-reward">+{task.xp_reward} XP {task.is_mandatory && ' / mandatory'}</span></div><div className="task-actions">{!task.is_completed && <button className="complete-button" type="button" onClick={() => completeTask(task)}>Clear</button>}<button className="text-button" type="button" onClick={() => { setEditingId(task.id); setForm({ title: task.title, description: task.description || '', category: task.category, is_mandatory: task.is_mandatory }) }}>Edit</button><button className="text-button danger" type="button" onClick={() => deleteTask(task.id)}>Delete</button></div></article>)}</div>}</div><aside className="create-panel" id="inventory"><p className="eyebrow">Add to your path</p><h2>{editingId ? 'Edit quest' : 'New quest'}</h2><form className="task-form" onSubmit={saveTask}><label>Quest title<input value={form.title} maxLength="160" onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="What will move you forward?" /></label><label>Attribute<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}><option value="intelligence">Intelligence</option><option value="physicality">Physicality</option><option value="social">Social & emotional</option></select></label><label className="checkbox-label"><input type="checkbox" checked={form.is_mandatory} onChange={(event) => setForm({ ...form, is_mandatory: event.target.checked })} /> Daily Trinity quest</label><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Saving...' : editingId ? 'Save changes' : 'Create quest'}</button>{editingId && <button className="switch-button" type="button" onClick={() => { setEditingId(null); setForm(emptyForm) }}>Cancel edit</button>}</form><div className="mini-stat"><span>Streak</span><strong>{progression.streak_count} days</strong></div><div className="mini-stat"><span>Coins</span><strong>◈ {user.coins}</strong></div></aside></section><section className="progression-band"><div className="attribute-panel"><div className="section-heading"><div><p className="eyebrow">Focus tree</p><h2>Attributes</h2></div><span className="streak-badge">{progression.streak_count} day streak</span></div><AttributeBar label="Intelligence" value={attributes.intelligence} accent="lime" /><AttributeBar label="Strength" value={attributes.strength} accent="orange" /><AttributeBar label="Social & emotional" value={attributes.emotional_intelligence} accent="cyan" /><AttributeBar label="Discipline" value={attributes.discipline} accent="paper" /></div><div className="shop-panel"><div className="section-heading"><div><p className="eyebrow">Spend your earned currency</p><h2>Reward vault</h2></div><span className="coin-total">◈ {user.coins}</span></div><div className="shop-grid">{shop.map((item) => <article className={`shop-card rarity-${item.rarity}`} key={item.id}><div className="item-glyph">✦</div><div><span className="item-rarity">{item.rarity}</span><h3>{item.name}</h3><p>{item.description}</p></div><button className="buy-button" type="button" disabled={purchasingId === item.id || user.coins < item.cost} onClick={() => purchase(item)}>{item.owned_quantity ? `Own ${item.owned_quantity}` : `◈ ${item.cost}`}</button></article>)}</div></div></section></main>
+  return <main className="app-shell"><a className="skip-link" href="#quests">Skip to quests</a><header className="topbar"><a className="brand" href="#top"><span className="brand-mark">+</span><span>LIFE RPG</span></a><nav aria-label="Primary navigation"><a className="nav-link active" href="#quests">Quests</a><a className="nav-link" href="#character">Character</a><a className="nav-link" href="#inventory">Rewards</a></nav><div className="header-actions"><span className="coin-pill">◈ {user.coins}</span><button className="profile-button" type="button" onClick={logout}><span className="avatar">{user.display_name[0].toUpperCase()}</span><span className="profile-name">{user.display_name}</span><span className="chevron">Log out</span></button></div></header>{notice && <div className="reward-toast" role="status">✦ {notice}</div>}<section className="hero-panel" id="character"><div className="hero-copy"><p className="eyebrow">Your sequence is active</p><h1>Make today<br /><em>count.</em></h1><p className="hero-note">Small actions compound into a life you are proud of.</p></div><div className="hero-figure" aria-hidden="true"><span className="figure-sun" /><span className="figure-orbit" /><span className="figure-orbit orbit-two" /><span className="figure-star">+</span><div className="figure-core">LVL<br /><strong>{String(progression.level).padStart(2, '0')}</strong></div></div><div className="level-card"><div className="level-heading"><span>Current level</span><strong>{String(progression.level).padStart(2, '0')}</strong></div><div className="xp-bar" aria-label={`${progression.xp} XP toward ${progression.next_level_xp} XP`}><span style={{ width: `${progression.level_progress}%` }} /></div><div className="xp-label"><span>{progression.xp} XP</span><span>{progression.next_level_xp} XP</span></div><p>{Math.max(0, progression.next_level_xp - progression.xp)} XP until next level</p></div></section>{boss && <section className="boss-section"><BossCard boss={boss} onComplete={completeBoss} onExpired={() => setBoss(null)} /></section>}<section className="content-grid"><div className="quest-section" id="quests"><div className="section-heading"><div><p className="eyebrow">Your daily run</p><h2>Active quests</h2></div><span className="quest-count">{completed} / {tasks.length} cleared</span></div>{error && <p className="form-error" role="alert">{error}</p>}{loading ? <LoadingSkeleton /> : <div className="quest-list">{tasks.map((task, index) => <article className={`quest-card ${task.is_completed ? 'completed' : ''}`} key={task.id}><span className="quest-number">{String(index + 1).padStart(2, '0')}</span><div className="quest-info"><span className="quest-type">{task.category}{task.verification_required && ' / verified quest'}</span><h3>{task.title}</h3><span className="quest-reward">+{task.xp_reward} XP {task.is_mandatory && ' / mandatory'}</span></div><div className="task-actions">{!task.is_completed && <button className="complete-button" type="button" onClick={() => completeTask(task)}>{task.verification_required && task.verification_status !== 'verified' ? 'Verify' : 'Clear'}</button>}<button className="text-button" type="button" onClick={() => { setEditingId(task.id); setForm({ title: task.title, description: task.description || '', category: task.category, is_mandatory: task.is_mandatory }) }}>Edit</button><button className="text-button danger" type="button" onClick={() => deleteTask(task.id)}>Delete</button></div></article>)}</div>}</div><aside className="create-panel" id="inventory"><p className="eyebrow">Add to your path</p><h2>{editingId ? 'Edit quest' : 'New quest'}</h2><form className="task-form" onSubmit={saveTask}><label>Quest title<input value={form.title} maxLength="160" onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="What will move you forward?" /></label><label>Attribute<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}><option value="intelligence">Intelligence</option><option value="physicality">Physicality</option><option value="social">Social & emotional</option></select></label><label className="checkbox-label"><input type="checkbox" checked={form.is_mandatory} onChange={(event) => setForm({ ...form, is_mandatory: event.target.checked })} /> Daily Trinity quest</label><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Saving...' : editingId ? 'Save changes' : 'Create quest'}</button>{editingId && <button className="switch-button" type="button" onClick={() => { setEditingId(null); setForm(emptyForm) }}>Cancel edit</button>}</form><div className="mini-stat"><span>Streak</span><strong>{progression.streak_count} days</strong></div><div className="mini-stat"><span>Coins</span><strong>◈ {user.coins}</strong></div></aside></section><section className="progression-band"><div className="attribute-panel"><div className="section-heading"><div><p className="eyebrow">Focus tree</p><h2>Attributes</h2></div><span className="streak-badge">{progression.streak_count} day streak</span></div><AttributeBar label="Intelligence" value={attributes.intelligence} accent="lime" /><AttributeBar label="Strength" value={attributes.strength} accent="orange" /><AttributeBar label="Social & emotional" value={attributes.emotional_intelligence} accent="cyan" /><AttributeBar label="Discipline" value={attributes.discipline} accent="paper" /></div><div className="shop-panel"><div className="section-heading"><div><p className="eyebrow">Spend your earned currency</p><h2>Reward vault</h2></div><span className="coin-total">◈ {user.coins}</span></div><div className="shop-grid">{shop.map((item) => <article className={`shop-card rarity-${item.rarity}`} key={item.id}><div className="item-glyph">✦</div><div><span className="item-rarity">{item.rarity}</span><h3>{item.name}</h3><p>{item.description}</p></div><button className="buy-button" type="button" disabled={purchasingId === item.id || user.coins < item.cost} onClick={() => purchase(item)}>{item.owned_quantity ? `Own ${item.owned_quantity}` : `◈ ${item.cost}`}</button></article>)}</div></div></section><TerritoryPanel attributes={attributes} />{verificationTask && <CameraModal task={verificationTask} token={token} onClose={() => setVerificationTask(null)} onVerified={(verified) => { setTasks((current) => current.map((task) => task.id === verified.id ? verified : task)); setVerificationTask(null); completeTask(verified) }} />}</main>
 }
 
 export default App
